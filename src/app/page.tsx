@@ -488,6 +488,7 @@ export default function Home() {
               <input
                 className="editor"
                 value={title}
+                onChange={(event) => setTitle(event.target.value)}
                 placeholder="Manuscript title"
                 style={{ flex: 1, marginRight: 12, minHeight: '44px' }}
               />
