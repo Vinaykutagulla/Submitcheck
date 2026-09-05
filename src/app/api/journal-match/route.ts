@@ -41,32 +41,48 @@ export async function POST(request: Request) {
     if (!supabase) {
       return NextResponse.json({ source: 'demo', matches: [] });
     }
+    const database = supabase;
 
     const indexingRelation = typeof body.indexing === 'string' && body.indexing !== 'Any indexing'
       ? 'journal_indexings!inner(indexing_name)'
       : 'journal_indexings(indexing_name)';
 
-    let query = supabase
-      .from('journals')
-      .select(`id,source_record_id,name,issn,eissn,publisher,field,source_type,subjects,quartile,oa,apc_display,indexed,scope,asjc_codes,requirements,sponsored,sponsor_tier,submission_url,${indexingRelation}`)
-      .eq('source_type', 'Journal')
-      .limit(1000);
+    const searchTerms = [...new Set([...manuscriptProfile.keywords, ...manuscriptProfile.topics])]
+      .map((term) => term.replace(/[^a-z0-9 -]/gi, '').trim())
+      .filter((term) => term.length >= 4)
+      .slice(0, 8);
 
-    if (typeof body.field === 'string' && body.field !== 'Any field') {
-      query = query.contains('subjects', [body.field]);
+    function buildQuery(withKeywordSearch: boolean) {
+      let nextQuery = database
+        .from('journals')
+        .select(`id,source_record_id,name,issn,eissn,publisher,field,source_type,subjects,quartile,oa,apc_display,indexed,scope,asjc_codes,requirements,sponsored,sponsor_tier,submission_url,${indexingRelation}`)
+        .eq('source_type', 'Journal')
+        .limit(1000);
+
+      if (typeof body.field === 'string' && body.field !== 'Any field') {
+        nextQuery = nextQuery.contains('subjects', [body.field]);
+      }
+      if (typeof body.quartile === 'string' && body.quartile !== 'Any quartile') {
+        const quartileRanks = body.quartile === 'Q1 only' ? ['Q1'] : body.quartile === 'Q2+' ? ['Q1', 'Q2'] : body.quartile === 'Q3+' ? ['Q1', 'Q2', 'Q3'] : ['Q1', 'Q2', 'Q3', 'Q4'];
+        nextQuery = nextQuery.in('quartile', quartileRanks);
+      }
+      if (typeof body.indexing === 'string' && body.indexing !== 'Any indexing') {
+        const indexingName = body.indexing === 'WoS' ? 'Web of Science' : body.indexing;
+        nextQuery = nextQuery.eq('journal_indexings.indexing_name', indexingName);
+      }
+      if (withKeywordSearch && searchTerms.length) {
+        nextQuery = nextQuery.or(searchTerms.map((term) => `search_document.ilike.%${term}%`).join(','));
+      }
+      return nextQuery;
     }
 
-    if (typeof body.quartile === 'string' && body.quartile !== 'Any quartile') {
-      const quartileRanks = body.quartile === 'Q1 only' ? ['Q1'] : body.quartile === 'Q2+' ? ['Q1', 'Q2'] : body.quartile === 'Q3+' ? ['Q1', 'Q2', 'Q3'] : ['Q1', 'Q2', 'Q3', 'Q4'];
-      query = query.in('quartile', quartileRanks);
+    let { data, error } = await buildQuery(true);
+    if (error) throw error;
+    if (!data?.length) {
+      const fallback = await buildQuery(false);
+      data = fallback.data;
+      error = fallback.error;
     }
-
-    if (typeof body.indexing === 'string' && body.indexing !== 'Any indexing') {
-      const indexingName = body.indexing === 'WoS' ? 'Web of Science' : body.indexing;
-      query = query.eq('journal_indexings.indexing_name', indexingName);
-    }
-
-    const { data, error } = await query;
     if (error) throw error;
 
     const journals = (data ?? []).map((row) => {
@@ -87,6 +103,7 @@ export async function POST(request: Request) {
         speed: 'Check journal website',
         indexed: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : ['Scopus']),
         scope: Array.isArray(row.subjects) && row.subjects.length ? row.subjects : (Array.isArray(row.scope) ? row.scope : []),
+        asjcCodes: Array.isArray(row.asjc_codes) ? row.asjc_codes : [],
         sponsored: Boolean(row.sponsored),
         requirements: {
           abstract: (requirements.abstract?.type === 'structured' ? 'structured' : 'unstructured') as 'structured' | 'unstructured',

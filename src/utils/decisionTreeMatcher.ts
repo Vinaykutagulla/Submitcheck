@@ -1,7 +1,9 @@
 export type MatchJournal = {
   name: string;
+  publisher?: string;
   field: string;
   scope: string[];
+  asjcCodes?: string[];
   sponsored?: boolean;
   requirements: {
     abstract: 'structured' | 'unstructured';
@@ -121,7 +123,7 @@ export function profileManuscript(text: string): ManuscriptProfile {
 export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal): JournalMatchResult {
   const reasons: string[] = [];
   const warnings: string[] = [];
-  const journalText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
+  const journalText = `${journal.name} ${journal.publisher ?? ''} ${journal.field} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
   const matchingKeywords = profile.keywords.filter((keyword) => journalText.includes(keyword));
   const matchingTopics = profile.topics.filter((topic) => journalText.includes(topic) || topicFamilies[topic].some((term) => journalText.includes(term)));
   const fieldFit = journal.field === profile.field ? 30 : journal.field === 'Multidisciplinary' ? 20 : 0;
