@@ -127,6 +127,10 @@ export default function Home() {
   const [field, setField] = useState('Any field');
   const [indexing, setIndexing] = useState('Any indexing');
   const [indexStats, setIndexStats] = useState<Array<{ name: string; count: number }>>([]);
+  const [journalLookupQuery, setJournalLookupQuery] = useState('');
+  const [journalLookupResults, setJournalLookupResults] = useState<Array<{ id: string; name: string; issn: string | null; eissn: string | null; publisher: string; field: string; subjects: string[]; quartile: string; oa: boolean; apc: string | null; indexed: string[]; submissionUrl: string | null }>>([]);
+  const [journalLookupLoading, setJournalLookupLoading] = useState(false);
+  const [journalLookupDetails, setJournalLookupDetails] = useState<Record<string, { source?: string; amount?: number | null; currency?: string | null; publicationWeeks?: number | null; journalUrl?: string | null; apcUrl?: string | null; apcSearchUrl?: string | null; searchUrl?: string | null }>>({});
   const [quartile, setQuartile] = useState('Any quartile');
   const [budget, setBudget] = useState(0);
   const [selected, setSelected] = useState<Journal | null>(null);
@@ -171,6 +175,29 @@ export default function Home() {
     .map(({ journal, match }) => ({ journal, match, gaps: getGaps(text, journal) })), [text, field, indexing, quartile, budget]);
   const matches = remoteMatches !== null ? remoteMatches : localMatches;
   const noBudgetMatches = Boolean(text && budget > 0 && matches.length === 0);
+
+  const lookupJournal = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (journalLookupQuery.trim().length < 2) return;
+    setJournalLookupLoading(true);
+    try {
+      const response = await fetch(`/api/journal-lookup?q=${encodeURIComponent(journalLookupQuery.trim())}`);
+      const payload = await response.json() as { journals?: typeof journalLookupResults };
+      setJournalLookupResults(payload.journals ?? []);
+    } catch {
+      setJournalLookupResults([]);
+    } finally {
+      setJournalLookupLoading(false);
+    }
+  };
+
+  const lookupJournalDetails = async (journal: { id: string; name: string; issn: string | null; eissn: string | null }) => {
+    const issn = journal.issn || journal.eissn;
+    if (!issn) return;
+    const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(issn)}&title=${encodeURIComponent(journal.name)}`);
+    const payload = await response.json();
+    setJournalLookupDetails((current) => ({ ...current, [journal.id]: payload }));
+  };
 
   useEffect(() => {
     fetch('/api/index-stats')
@@ -566,6 +593,7 @@ export default function Home() {
             )}
           </section>
           <section className="panel"><label className="panel-label">Narrow it down</label><div className="filters"><label>Field<select value={field} onChange={(event) => { setField(event.target.value); setRemoteMatches([]); }}><option>Any field</option>{scopusFields.map((subject) => <option key={subject}>{subject}</option>)}</select></label><label>Indexing<select value={indexing} onChange={(event) => { setIndexing(event.target.value); setRemoteMatches([]); }}><option>Any indexing</option>{indexStats.length ? indexStats.filter((item) => item.count > 0).map((item) => <option key={item.name} value={item.name}>{item.name} ({item.count.toLocaleString()} verified)</option>) : <option value="Scopus">Scopus</option>}</select></label><label>Quartile<select value={quartile} onChange={(event) => { setQuartile(event.target.value); setRemoteMatches([]); }}>{quartileOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label className="budget-filter">Budget <strong>{budget === 0 ? 'Any budget' : `${formatBudget(budget)} or less`}</strong><input type="range" min="0" max={maximumBudget} step="1000" value={budget} aria-label="Maximum publication budget" onChange={(event) => { setBudget(Number(event.target.value)); setRemoteMatches([]); }} /><span className="budget-range"><small>Any</small><small>₹1,000</small><small>{formatBudget(maximumBudget)}</small></span></label><label>Access<select><option>Any</option><option>OA / Free</option><option>Paid</option></select></label></div></section>
+          <section className="panel journal-lookup-panel"><label className="panel-label">Check any journal directly <span className="hint">Search by journal name, publisher, or ISSN to see indexing and quartile details.</span></label><form className="journal-lookup-form" onSubmit={lookupJournal}><input value={journalLookupQuery} onChange={(event) => setJournalLookupQuery(event.target.value)} placeholder="e.g. Nature Reviews Cardiology, ISSN, or publisher" /><button className="btn btn-primary" type="submit" disabled={journalLookupLoading}>{journalLookupLoading ? 'Searching...' : 'Check journal'}</button></form>{journalLookupResults.length > 0 && <div className="journal-lookup-results">{journalLookupResults.map((journal) => { const details = journalLookupDetails[journal.id]; return <div className="lookup-result" key={journal.id}><div><strong>{journal.name}</strong><span>{journal.publisher} · {journal.field}</span><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}{journal.oa && <span className="tag oa">Open access</span>}</div></div><div className="lookup-actions">{journal.issn && <small>ISSN {journal.issn}</small>}<a className="btn-small journal-link" href={journal.submissionUrl || `https://www.google.com/search?q=${encodeURIComponent(`${journal.name} official journal website`)}`} target="_blank" rel="noreferrer">↗ Website</a>{(journal.issn || journal.eissn) && <button type="button" className="btn-small" onClick={() => lookupJournalDetails(journal)}>{details ? 'Refresh details' : 'APC/details'}</button>}</div>{details && <div className="lookup-details"><span><strong>APC:</strong> {details.amount ? `${details.amount} ${details.currency}` : 'Not listed'}</span><span><strong>Speed:</strong> {details.publicationWeeks ? `${details.publicationWeeks} weeks` : 'Not listed'}</span>{details.journalUrl && <a href={details.journalUrl} target="_blank" rel="noreferrer">Open official website</a>}{details.apcUrl ? <a href={details.apcUrl} target="_blank" rel="noreferrer">View APC source</a> : details.apcSearchUrl ? <a href={details.apcSearchUrl} target="_blank" rel="noreferrer">Find APC pricing</a> : null}</div>}</div>; })}</div>}</section>
           <div className="section-title">Matching journals <span>{text ? `${Math.min(matches.length, plan === 'pro' ? matches.length : 3)} matched by fit` : ''}</span></div>
           {noBudgetMatches && <div className="empty">No journals with a verified APC are available under {formatBudget(budget)}. Try a higher budget or choose Any budget; this catalog does not guess unknown APC prices.</div>}
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
