@@ -548,7 +548,7 @@ export default function Home() {
 
         {step === 1 && <>
           <section className="panel">
-            <label className="panel-label">Paste your manuscript <span className="hint">Title, abstract, and as many sections as you have</span></label>
+            <label className="panel-label">Paste your manuscript <span className="hint">For the most accurate journal recommendations, include Title, Abstract, Keywords, Methods, Results, and References.</span></label>
             <div className="row" style={{ marginBottom: '12px' }}>
               <input
                 className="editor"
