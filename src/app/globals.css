@@ -162,6 +162,8 @@ button { cursor: pointer; }
 .submission-field { padding: 11px; border-left: 2px solid var(--moss); background: var(--moss-soft); }
 .submission-field strong { display: block; color: var(--ink-soft); font-size: 10px; text-transform: uppercase; }
 .submission-field p { margin: 5px 0 9px; white-space: pre-wrap; font-size: 12px; }
+.submission-package-empty { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; padding: 16px; border-left: 2px solid var(--gold); background: var(--paper); color: var(--gold); }
+.submission-package-empty span { color: var(--ink-soft); font-size: 12px; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(34, 32, 27, .5); }
 .modal-card { position: relative; width: 100%; max-width: 620px; border: 1px solid var(--rule); background: var(--card); }
 .modal-close { position: absolute; top: 14px; right: 16px; border: 0; background: transparent; color: var(--ink-soft); }
