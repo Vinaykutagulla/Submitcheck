@@ -70,8 +70,14 @@ function countWords(text: string) {
 }
 
 function extractKeywords(text: string) {
+  const titleText = text.match(/^title\s*:\s*(.+)$/im)?.[1] ?? '';
+  const keywordText = text.match(/keywords?\s*:\s*([^\n]+)/i)?.[1] ?? '';
+  const explicitWords = `${titleText} ${keywordText}`.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? [];
   const words = text.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? [];
   const counts = new Map<string, number>();
+  for (const word of explicitWords) {
+    if (!stopWords.has(word)) counts.set(word, (counts.get(word) ?? 0) + 5);
+  }
   for (const word of words) {
     if (stopWords.has(word)) continue;
     counts.set(word, (counts.get(word) ?? 0) + 1);
