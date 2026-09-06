@@ -195,9 +195,12 @@ button { cursor: pointer; }
 .expert-form label { display: block; margin-bottom: 12px; color: var(--ink-soft); font-size: 11px; font-weight: 500; }
 .expert-form input, .expert-form select, .expert-form textarea { display: block; width: 100%; margin-top: 4px; padding: 9px 10px; border: 1px solid var(--rule); border-radius: 2px; background: transparent; color: var(--ink); font-size: 12.5px; }
 .expert-form textarea { min-height: 92px; resize: vertical; }
+.contact-consent { display: flex !important; align-items: flex-start; gap: 8px; }
+.contact-consent input { width: auto; margin: 3px 0 0; }
 .expert-form input:focus, .expert-form select:focus, .expert-form textarea:focus { outline: none; border-color: var(--shu); }
 .expert-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .quote-message { margin-top: 14px; padding: 11px 13px; border-left: 2px solid var(--moss); background: var(--moss-soft); color: var(--moss); font-size: 12px; line-height: 1.6; }
+.quote-disclaimer { margin: 2px 0 12px; color: var(--ink-faint); font-size: 11px; line-height: 1.5; }
 @media (max-width: 700px) {
   .wrap { padding: 0 18px; }
   .letterhead { padding: 28px 18px 20px; }

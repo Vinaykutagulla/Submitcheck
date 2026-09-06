@@ -440,7 +440,7 @@ export default function Home() {
       body: JSON.stringify({ serviceType, topic: serviceTopic, words: serviceWords, deadline: serviceDeadline, requirements: serviceRequirements, whatsapp: serviceWhatsApp, email: serviceEmail, contactMethod: serviceContactMethod, quoteAmount, timeline }),
     }).then(async (response) => {
       if (!response.ok) throw new Error('Unable to save request');
-      setQuoteMessage(`Indicative quote: ${quoteAmount} · Estimated timeline: ${timeline}. Our expert panel will confirm the final quote by ${serviceContactMethod === 'Both' ? 'WhatsApp and email' : serviceContactMethod}.`);
+      setQuoteMessage(`Expert writing service estimate: ${quoteAmount} · Estimated timeline: ${timeline}. Publication fees, journal APCs, submission charges, and taxes are not included. Our expert panel will confirm the final service quote by ${serviceContactMethod === 'Both' ? 'WhatsApp and email' : serviceContactMethod}.`);
     }).catch(() => setQuoteMessage('We could not save the request. Please try again.'));
   };
 
@@ -640,7 +640,7 @@ export default function Home() {
           <div className="expert-form-row"><label>WhatsApp number<input value={serviceWhatsApp} onChange={(event) => setServiceWhatsApp(event.target.value)} placeholder="+91 98765 43210" type="tel" /></label><label>Email address<input value={serviceEmail} onChange={(event) => setServiceEmail(event.target.value)} placeholder="you@example.com" type="email" /></label></div>
           <label>Preferred contact method<select value={serviceContactMethod} onChange={(event) => setServiceContactMethod(event.target.value)}><option>Both</option><option>WhatsApp</option><option>Email</option></select></label>
           <label className="contact-consent"><input type="checkbox" checked={serviceConsent} onChange={(event) => setServiceConsent(event.target.checked)} /> I consent to receive the quote and timeline by my selected contact method.</label>
-          <button className="btn btn-primary" onClick={requestExpertQuote}>Get indicative quote</button>
+          <p className="quote-disclaimer">This estimate is for writing, editing, and formatting services only. Journal APCs and publication charges are separate.</p><button className="btn btn-primary" onClick={requestExpertQuote}>Get writing service quote</button>
           {quoteMessage && <div className="quote-message">{quoteMessage}</div>}
         </div>
       </section>
