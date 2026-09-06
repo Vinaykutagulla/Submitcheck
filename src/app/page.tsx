@@ -155,6 +155,10 @@ export default function Home() {
   const [serviceWords, setServiceWords] = useState('5000');
   const [serviceDeadline, setServiceDeadline] = useState('Flexible');
   const [serviceRequirements, setServiceRequirements] = useState('');
+  const [serviceWhatsApp, setServiceWhatsApp] = useState('');
+  const [serviceEmail, setServiceEmail] = useState('');
+  const [serviceContactMethod, setServiceContactMethod] = useState('Both');
+  const [serviceConsent, setServiceConsent] = useState(false);
   const [quoteMessage, setQuoteMessage] = useState('');
 
   const localMatches = useMemo(() => rankJournals(text, journals
@@ -415,8 +419,12 @@ export default function Home() {
   };
 
   const requestExpertQuote = () => {
-    if (!serviceTopic.trim() || !serviceRequirements.trim()) {
-      setQuoteMessage('Please add your topic and requirements to receive a quote.');
+    if (!serviceTopic.trim() || !serviceRequirements.trim() || !serviceWhatsApp.trim() || !serviceEmail.trim()) {
+      setQuoteMessage('Please add your topic, requirements, WhatsApp number, and email to receive a quote.');
+      return;
+    }
+    if (!serviceConsent) {
+      setQuoteMessage('Please consent to receive the quote by WhatsApp and email.');
       return;
     }
 
@@ -424,7 +432,16 @@ export default function Home() {
     const base = serviceType === 'Book chapter' ? 8000 : serviceType === 'Thesis' ? 12000 : 6000;
     const estimate = Math.max(base, Math.round(base * words / 5000));
     const timeline = serviceDeadline === 'Urgent (7 days)' ? '5-7 working days' : serviceDeadline === 'Within 2 weeks' ? '10-14 working days' : '2-4 weeks';
-    setQuoteMessage(`Indicative quote: ₹${estimate.toLocaleString('en-IN')} · Estimated timeline: ${timeline}. Our expert panel will review the details and confirm the final quote.`);
+    const quoteAmount = `₹${estimate.toLocaleString('en-IN')}`;
+    setQuoteMessage(`Saving your request...`);
+    fetch('/api/expert-quote-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serviceType, topic: serviceTopic, words: serviceWords, deadline: serviceDeadline, requirements: serviceRequirements, whatsapp: serviceWhatsApp, email: serviceEmail, contactMethod: serviceContactMethod, quoteAmount, timeline }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error('Unable to save request');
+      setQuoteMessage(`Indicative quote: ${quoteAmount} · Estimated timeline: ${timeline}. Our expert panel will confirm the final quote by ${serviceContactMethod === 'Both' ? 'WhatsApp and email' : serviceContactMethod}.`);
+    }).catch(() => setQuoteMessage('We could not save the request. Please try again.'));
   };
 
   const selectJournal = (journal: Journal, nextStep = 2) => {
@@ -620,6 +637,9 @@ export default function Home() {
           <label>Topic or working title<input value={serviceTopic} onChange={(event) => setServiceTopic(event.target.value)} placeholder="e.g. AI in drug discovery" /></label>
           <div className="expert-form-row"><label>Approx. words<input type="number" min="500" step="500" value={serviceWords} onChange={(event) => setServiceWords(event.target.value)} /></label><label>When do you need it?<select value={serviceDeadline} onChange={(event) => setServiceDeadline(event.target.value)}><option>Flexible</option><option>Within 2 weeks</option><option>Urgent (7 days)</option></select></label></div>
           <label>Tell us your requirements<textarea value={serviceRequirements} onChange={(event) => setServiceRequirements(event.target.value)} placeholder="Field, target journal, sections needed, references, data available, and any formatting requirements..." /></label>
+          <div className="expert-form-row"><label>WhatsApp number<input value={serviceWhatsApp} onChange={(event) => setServiceWhatsApp(event.target.value)} placeholder="+91 98765 43210" type="tel" /></label><label>Email address<input value={serviceEmail} onChange={(event) => setServiceEmail(event.target.value)} placeholder="you@example.com" type="email" /></label></div>
+          <label>Preferred contact method<select value={serviceContactMethod} onChange={(event) => setServiceContactMethod(event.target.value)}><option>Both</option><option>WhatsApp</option><option>Email</option></select></label>
+          <label className="contact-consent"><input type="checkbox" checked={serviceConsent} onChange={(event) => setServiceConsent(event.target.checked)} /> I consent to receive the quote and timeline by my selected contact method.</label>
           <button className="btn btn-primary" onClick={requestExpertQuote}>Get indicative quote</button>
           {quoteMessage && <div className="quote-message">{quoteMessage}</div>}
         </div>

@@ -126,6 +126,23 @@ create table public.payments (
   updated_at timestamptz not null default now()
 );
 
+create table public.expert_quote_requests (
+  id uuid primary key default gen_random_uuid(),
+  service_type text not null,
+  topic text not null,
+  word_count integer not null,
+  deadline text not null,
+  requirements text not null,
+  whatsapp text not null,
+  email text not null,
+  contact_method text not null check (contact_method in ('WhatsApp', 'Email', 'Both')),
+  indicative_quote text not null,
+  estimated_timeline text not null,
+  status text not null default 'new' check (status in ('new', 'reviewing', 'quoted', 'closed')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -152,6 +169,7 @@ alter table public.journal_requirements enable row level security;
 alter table public.journal_snapshots enable row level security;
 alter table public.manuscript_journal_matches enable row level security;
 alter table public.payments enable row level security;
+alter table public.expert_quote_requests enable row level security;
 
 create policy "owners read profiles" on public.profiles for select using (auth.uid() = id);
 create policy "owners update profiles" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
@@ -168,6 +186,7 @@ create policy "owners manage matches" on public.manuscript_journal_matches for a
   exists (select 1 from public.manuscripts where id = manuscript_id and user_id = auth.uid())
 );
 create policy "owners read payments" on public.payments for select using (auth.uid() = user_id);
+create policy "authenticated users read expert quote requests" on public.expert_quote_requests for select using (auth.role() = 'authenticated');
 
 create index idx_journals_field_quartile on public.journals (field, quartile);
 create index idx_journals_updated_at on public.journals (updated_at desc);
