@@ -35,7 +35,10 @@ export async function POST(request: Request) {
 
     if (error) throw error;
     return NextResponse.json({ requestId: data.id }, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST205') {
+      return NextResponse.json({ error: 'Expert quote table is not configured. Run the expert_quote_requests SQL in Supabase.' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Unable to save the quote request.' }, { status: 500 });
   }
 }
