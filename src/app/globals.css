@@ -155,6 +155,13 @@ button { cursor: pointer; }
 .rules p { display: flex; justify-content: space-between; gap: 14px; margin: 0; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 13px; }
 .check-row { display: flex; gap: 10px; align-items: center; margin: 0; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .submit-status { margin: 16px 0; padding: 16px 20px; border: 1px solid var(--gold); color: var(--gold); text-align: center; }
+.submission-package { display: grid; gap: 12px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.submission-package label { display: block; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+.submission-package input, .submission-package textarea { display: block; width: 100%; margin-top: 5px; padding: 10px 11px; border: 1px solid var(--rule); border-radius: 2px; background: var(--paper); color: var(--ink); font-size: 12px; }
+.submission-package textarea { min-height: 68px; resize: vertical; }
+.submission-field { padding: 11px; border-left: 2px solid var(--moss); background: var(--moss-soft); }
+.submission-field strong { display: block; color: var(--ink-soft); font-size: 10px; text-transform: uppercase; }
+.submission-field p { margin: 5px 0 9px; white-space: pre-wrap; font-size: 12px; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(34, 32, 27, .5); }
 .modal-card { position: relative; width: 100%; max-width: 620px; border: 1px solid var(--rule); background: var(--card); }
 .modal-close { position: absolute; top: 14px; right: 16px; border: 0; background: transparent; color: var(--ink-soft); }

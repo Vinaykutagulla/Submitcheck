@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { parseUploadedManuscript } from '@/lib/upload-utils';
 import { rankJournals } from '@/utils/decisionTreeMatcher';
+import { SubmissionField } from '@/components/SubmissionField';
 
 type Journal = {
   name: string;
@@ -140,6 +141,14 @@ export default function Home() {
   const [formatDone, setFormatDone] = useState(false);
   const [formatLoading, setFormatLoading] = useState(false);
   const [verifyDone, setVerifyDone] = useState(false);
+  const [authorName, setAuthorName] = useState('');
+  const [authorAffiliation, setAuthorAffiliation] = useState('');
+  const [authorOrcid, setAuthorOrcid] = useState('');
+  const [fundingStatement, setFundingStatement] = useState('No external funding was received for this work.');
+  const [conflictStatement, setConflictStatement] = useState('The authors declare no competing interests.');
+  const [dataStatement, setDataStatement] = useState('Data availability will be confirmed by the corresponding author before submission.');
+  const [declarationsConfirmed, setDeclarationsConfirmed] = useState(false);
+  const [copiedSubmissionField, setCopiedSubmissionField] = useState('');
   const [showPricing, setShowPricing] = useState(false);
   const [remoteMatches, setRemoteMatches] = useState<Array<{ journal: Journal; match: { score: number; confidence: 'High' | 'Medium' | 'Low'; reasons: string[]; warnings: string[] }; gaps: ReturnType<typeof getGaps> }> | null>(null);
   const [matching, setMatching] = useState(false);
@@ -502,6 +511,12 @@ export default function Home() {
   const fixGaps = aiGaps.length
     ? aiGaps.map(({ priority, title, description, example }) => ({ priority, title, description, example }))
     : chosenGaps;
+  const manuscriptAbstract = text.match(/abstract\s*:\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
+  const manuscriptKeywords = text.match(/keywords?\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? '';
+  const copySubmissionField = async (label: string, value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopiedSubmissionField(label);
+  };
   const allChecks = [
     ['Manuscript has enough content', text.trim().length > 500],
     ['Title is present', title.trim().length > 3 || /^title\s*:/im.test(text)],
@@ -645,7 +660,7 @@ export default function Home() {
 
         {step === 4 && <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="quick-tip">We check what matters. No fake AI-detection percentages — honest signals and readiness checks.</div><button className="btn btn-primary" onClick={() => plan === 'pro' ? setVerifyDone(true) : setShowPricing(true)}>🔍 Run checks</button></div>{verifyDone ? <div className="panel rules"><div className="verdict yellow">{allChecks.filter(([, done]) => done).length}/{allChecks.length} checks passed</div>{allChecks.map(([label, done]) => <p key={label as string}><span>{label as string}</span><strong className={done ? 'pass' : 'warn'}>{done ? '✅ Pass' : '⚠️ Check'}</strong></p>)}</div> : <div className="locked-card"><div className="blur-line tall">Completeness, references, declarations, and writing-quality signals</div><div className="locked-overlay">🔒<strong>Integrity checks are a Pro feature</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock verify</button></div></div>}</section>}
 
-        {step === 5 && <section className="view"><div className="panel"><label className="panel-label">Submission ready</label>{[['📄 Manuscript is complete', text.length > 200], ['🎯 Target journal selected', !!selected], ['🔧 Gaps fixed', chosenGaps.filter((gap) => gap.priority === 'critical').every((gap) => fixed.includes(gap.title))], ['📐 Formatting reviewed', formatDone], ['🔍 Integrity checks completed', verifyDone]].map(([label, done]) => <p className="check-row" key={label as string}><span>{done ? '✅' : '⬜'}</span>{label as string}</p>)}<div className="submit-status">{plan === 'pro' && selected && formatDone && verifyDone ? '🎉 Ready to submit!' : '🔒 Unlock Fix, Format, and Verify to finish your checklist'}</div><button className="btn btn-success" onClick={() => { if (plan === 'pro' && selected) window.open('https://www.sciencedirect.com/', '_blank'); else setShowPricing(true); }}>📤 Open journal submission portal</button></div></section>}
+        {step === 5 && <section className="view"><div className="panel"><label className="panel-label">Submission package <span className="hint">Review every field and declaration before opening the publisher portal.</span></label>{[['📄 Manuscript is complete', text.length > 200], ['🎯 Target journal selected', !!selected], ['🔧 Gaps fixed', chosenGaps.filter((gap) => gap.priority === 'critical').every((gap) => fixed.includes(gap.title))], ['📐 Formatting reviewed', formatDone], ['🔍 Integrity checks completed', verifyDone]].map(([label, done]) => <p className="check-row" key={label as string}><span>{done ? '✅' : '⬜'}</span>{label as string}</p>)}{selected && <div className="submission-package"><SubmissionField label="Title" value={title || text.match(/^title\s*:\s*(.+)$/im)?.[1] || 'Add a manuscript title'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><SubmissionField label="Abstract" value={manuscriptAbstract || 'Abstract not detected. Add it before submission.'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><SubmissionField label="Keywords" value={manuscriptKeywords || 'Keywords not detected. Add 4-8 terms.'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><label>Corresponding author<input value={authorName} onChange={(event) => setAuthorName(event.target.value)} placeholder="Full name" /></label><label>Affiliation<input value={authorAffiliation} onChange={(event) => setAuthorAffiliation(event.target.value)} placeholder="University, department, country" /></label><label>ORCID (optional)<input value={authorOrcid} onChange={(event) => setAuthorOrcid(event.target.value)} placeholder="0000-0000-0000-0000" /></label><label>Funding statement<textarea value={fundingStatement} onChange={(event) => setFundingStatement(event.target.value)} /></label><label>Competing interests<textarea value={conflictStatement} onChange={(event) => setConflictStatement(event.target.value)} /></label><label>Data availability statement<textarea value={dataStatement} onChange={(event) => setDataStatement(event.target.value)} /></label><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => setDeclarationsConfirmed(event.target.checked)} /> I confirm that author details, ethics, funding, conflicts, data availability, and manuscript content are accurate.</label></div>}<div className="submit-status">{plan === 'pro' && selected && formatDone && verifyDone && declarationsConfirmed ? 'Ready for author-controlled submission.' : 'Complete all checks and confirm declarations before submission.'}</div><button className="btn btn-success" disabled={!selected || !declarationsConfirmed} onClick={() => { if (selected) window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank'); }}>📤 Open journal submission portal</button></div></section>}
       </div>
 
       <section className="expert-service">
