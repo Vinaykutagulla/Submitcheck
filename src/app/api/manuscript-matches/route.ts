@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase
       .from('manuscript_journal_matches')
-      .select('*')
+      .select('*, journals(name, publisher, quartile, apc_display, oa, submission_url)')
       .eq('manuscript_id', manuscriptId)
       .order('created_at', { ascending: false });
 

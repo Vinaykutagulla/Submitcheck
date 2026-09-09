@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { profileManuscript, rankJournals } from '@/utils/decisionTreeMatcher';
+import { lookupLiveApc } from '@/lib/journal-apc';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -63,8 +64,8 @@ export async function POST(request: Request) {
         nextQuery = nextQuery.contains('subjects', [body.field]);
       }
       if (typeof body.quartile === 'string' && body.quartile !== 'Any quartile') {
-        const quartileRanks = body.quartile === 'Q1 only' ? ['Q1'] : body.quartile === 'Q2+' ? ['Q1', 'Q2'] : body.quartile === 'Q3+' ? ['Q1', 'Q2', 'Q3'] : ['Q1', 'Q2', 'Q3', 'Q4'];
-        nextQuery = nextQuery.in('quartile', quartileRanks);
+        const quartileRank = body.quartile.match(/^Q[1-4]/)?.[0];
+        if (quartileRank) nextQuery = nextQuery.eq('quartile', quartileRank);
       }
       if (typeof body.indexing === 'string' && body.indexing !== 'Any indexing') {
         const indexingName = body.indexing === 'WoS' ? 'Web of Science' : body.indexing;
@@ -113,14 +114,25 @@ export async function POST(request: Request) {
       };
     });
 
-    const filteredJournals = maxBudget === null
-      ? journals
-      : journals.filter((journal) => {
-          const apc = Number(String(journal.apc).replace(/[^0-9]/g, '')) || null;
-          return apc !== null && apc <= maxBudget;
-        });
+    let rankedJournals = rankJournals(body.manuscriptText, journals);
+    if (maxBudget !== null) {
+      const candidates = rankedJournals.slice(0, 40);
+      const enriched = await Promise.all(candidates.map(async ({ journal, profile, match }) => {
+        const catalogApc = Number(String(journal.apc).replace(/[^0-9]/g, '')) || null;
+        if (catalogApc !== null) return { journal, profile, match };
+        const liveApc = await lookupLiveApc(journal.issn || journal.eissn, journal.submissionUrl);
+        if (liveApc) {
+          return { journal: { ...journal, apc: `${liveApc.amount} ${liveApc.currency}` }, profile, match };
+        }
+        return { journal, profile, match };
+      }));
+      rankedJournals = enriched.filter(({ journal }) => {
+        const apc = Number(String(journal.apc).replace(/[^0-9]/g, '')) || null;
+        return apc !== null && apc <= maxBudget;
+      });
+    }
 
-    const matches = rankJournals(body.manuscriptText, filteredJournals).slice(0, 25);
+    const matches = rankedJournals.slice(0, 25);
     return NextResponse.json({ source: 'supabase', matches });
   } catch (error) {
     console.error('Journal match failed:', error);

@@ -13,10 +13,9 @@ type DoajJournal = {
 
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams.get('q')?.trim() || '';
-  const search = query ? `(${query.replace(/[():]/g, ' ')}) AND bibjson.apc.has_apc:false` : 'bibjson.apc.has_apc:false';
 
   try {
-    const response = await fetch(`https://doaj.org/api/search/journals/${encodeURIComponent(search)}?page=1&pageSize=100`, {
+    const response = await fetch('https://doaj.org/api/search/journals/bibjson.apc.has_apc:false?page=1&pageSize=100', {
       headers: { Accept: 'application/json', 'User-Agent': 'SubmitCheck/1.0 low APC discovery' },
       signal: AbortSignal.timeout(10000),
       next: { revalidate: 86400 },
@@ -24,6 +23,7 @@ export async function GET(request: Request) {
     if (!response.ok) throw new Error(`DOAJ returned ${response.status}`);
     const payload = await response.json() as { results?: DoajJournal[]; total?: number };
 
+    const terms = query.toLowerCase().split(/\s+/).filter((term) => term.length >= 4);
     const journals = (payload.results ?? []).map((record) => {
       const bibjson = record.bibjson ?? {};
       const issn = bibjson.identifier?.find((item) => item.type === 'pissn' || item.type === 'eissn')?.id ?? null;
@@ -37,6 +37,9 @@ export async function GET(request: Request) {
         apcUrl: bibjson.apc?.url ?? null,
         apc: bibjson.apc?.max?.[0] ?? null,
       };
+    }).sort((left, right) => {
+      const score = (journal: typeof left) => terms.reduce((total, term) => total + (`${journal.title} ${journal.subjects.join(' ')}`.toLowerCase().includes(term) ? 1 : 0), 0);
+      return score(right) - score(left);
     });
 
     return NextResponse.json({ source: 'DOAJ', verifiedNoApc: true, total: payload.total ?? journals.length, journals });

@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 export default function SignUpPage() {
@@ -26,7 +27,7 @@ export default function SignUpPage() {
         router.push('/');
         router.refresh();
       } else {
-        setMessage('Check your email to confirm your account.');
+        setMessage('Account created. Check your email to confirm, then sign in to see your name and email in the Author Dashboard.');
       }
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : '';
@@ -41,7 +42,7 @@ export default function SignUpPage() {
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <a href="/" className="auth-back">← Back to SubmitCheck</a>
+        <Link href="/" className="auth-back">← Back to SubmitCheck</Link>
         <div className="auth-mark">✓</div>
         <p className="auth-kicker">Author workspace</p>
         <h1>Create your account</h1>

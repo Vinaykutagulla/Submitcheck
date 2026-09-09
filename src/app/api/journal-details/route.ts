@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { lookupLiveApc } from '@/lib/journal-apc';
 
 type DoajRecord = {
   bibjson?: {
@@ -49,14 +50,17 @@ export async function GET(request: Request) {
       const journal = payload.results?.[0]?.bibjson;
       if (journal) {
         const price = journal.apc?.max?.[0];
+        const publisherApc = typeof price?.price !== 'number'
+          ? await lookupLiveApc(issn, journal.ref?.journal)
+          : null;
         return NextResponse.json({
-          source: 'DOAJ',
+          source: publisherApc?.source ?? 'DOAJ',
           found: Boolean(journal.ref?.journal),
           title: journal.title,
-          hasApc: Boolean(journal.apc?.has_apc),
-          amount: typeof price?.price === 'number' ? price.price : null,
-          currency: price?.currency ?? null,
-          apcUrl: journal.apc?.url ?? null,
+          hasApc: Boolean(journal.apc?.has_apc || price?.price || publisherApc),
+          amount: typeof price?.price === 'number' ? price.price : publisherApc?.amount ?? null,
+          currency: price?.currency ?? publisherApc?.currency ?? null,
+          apcUrl: journal.apc?.url ?? publisherApc?.url ?? null,
           apcSearchUrl: journal.apc?.url ? null : apcSearchUrl(journal.title ?? requestedTitle),
           journalUrl: journal.ref?.journal ?? null,
           searchUrl: journal.ref?.journal ? null : searchUrl(journal.title ?? issn),
@@ -68,14 +72,15 @@ export async function GET(request: Request) {
     }
 
     const crossref = await lookupCrossref(issn);
+    const publisherApc = await lookupLiveApc(issn, crossref?.URL);
     return NextResponse.json({
-      source: 'Crossref',
+      source: publisherApc?.source ?? 'Crossref',
       found: Boolean(crossref?.URL),
       title: crossref?.title ?? null,
-      hasApc: false,
-      amount: null,
-      currency: null,
-      apcUrl: null,
+      hasApc: Boolean(publisherApc),
+      amount: publisherApc?.amount ?? null,
+      currency: publisherApc?.currency ?? null,
+      apcUrl: publisherApc?.url ?? null,
       apcSearchUrl: apcSearchUrl(crossref?.title ?? requestedTitle),
       journalUrl: crossref?.URL ?? null,
       searchUrl: crossref?.URL ? null : searchUrl(crossref?.title ?? requestedTitle),

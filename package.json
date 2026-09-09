@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "import:journals": "node scripts/import-scopus.js",
+    "import:scimago": "node scripts/import-scimago.js",
     "enrich:indexes": "node scripts/enrich-indexes.js"
   },
   "dependencies": {

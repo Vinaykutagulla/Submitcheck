@@ -5,6 +5,12 @@ import { parseUploadedManuscript } from '@/lib/upload-utils';
 import { rankJournals } from '@/utils/decisionTreeMatcher';
 import { SubmissionField } from '@/components/SubmissionField';
 
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
 type Journal = {
   name: string;
   issn?: string;
@@ -69,7 +75,7 @@ const scopusFields = [
 ];
 
 const indexingServices = ['Any indexing', 'Scopus', 'WoS', 'PubMed', 'Embase', 'DOAJ', 'CINAHL', 'ERIC', 'PsycINFO', 'INSPEC', 'Ei Compendex', 'MathSciNet', 'EBSCO'];
-const quartileOptions = ['Any quartile', 'Q1 only', 'Q2+', 'Q3+', 'Q4+'];
+const quartileOptions = ['Any quartile', 'Q1 only', 'Q2 only', 'Q3 only', 'Q4 only'];
 const maximumBudget = 500000;
 
 function parseApcToNumber(rawApc: string | undefined | null) {
@@ -85,6 +91,14 @@ function parseApcToNumber(rawApc: string | undefined | null) {
 
 function formatBudget(value: number) {
   return `₹${value.toLocaleString('en-IN')}`;
+}
+
+function matchesQuartile(quartile: string, selectedQuartile: string) {
+  if (selectedQuartile === 'Any quartile' || quartile === 'Unranked') return true;
+  const rank = Number(quartile.replace('Q', ''));
+  if (!Number.isFinite(rank)) return false;
+  const selectedRank = Number(selectedQuartile.replace('Q', '').replace(' only', ''));
+  return Number.isFinite(selectedRank) && rank === selectedRank;
 }
 
 function getJournalRecordUrl(journal: Journal) {
@@ -123,6 +137,7 @@ function getGaps(text: string, journal: Journal) {
 export default function Home() {
   const [step, setStep] = useState(1);
   const [plan, setPlan] = useState<'free' | 'pro'>('free');
+  const [account, setAccount] = useState<{ fullName: string; email: string } | null>(null);
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
   const [field, setField] = useState('Any field');
@@ -136,6 +151,7 @@ export default function Home() {
   const [journalLookupDetails, setJournalLookupDetails] = useState<Record<string, { source?: string; amount?: number | null; currency?: string | null; publicationWeeks?: number | null; journalUrl?: string | null; apcUrl?: string | null; apcSearchUrl?: string | null; searchUrl?: string | null }>>({});
   const [quartile, setQuartile] = useState('Any quartile');
   const [budget, setBudget] = useState(0);
+  const [access, setAccess] = useState('Any');
   const [selected, setSelected] = useState<Journal | null>(null);
   const [fixed, setFixed] = useState<string[]>([]);
   const [formatDone, setFormatDone] = useState(false);
@@ -173,22 +189,15 @@ export default function Home() {
   const [quoteMessage, setQuoteMessage] = useState('');
 
   const localMatches = useMemo(() => rankJournals(text, journals
-      .filter((journal) => field === 'Any field' || journal.field === field)
+    .filter((journal) => field === 'Any field' || journal.field === field)
     .filter((journal) => indexing === 'Any indexing' || journal.indexed.includes(indexing))
-    .filter((journal) => {
-      const maxBudget = budget === 0 ? null : budget;
-      if (!maxBudget) return true;
-      const apc = parseApcToNumber(journal.apc);
-      return apc !== null && apc <= maxBudget;
-    })
-    .filter((journal) => {
-      if (quartile === 'Any quartile' || journal.quartile === 'Unranked') return true;
-      const rank = Number(journal.quartile.replace('Q', ''));
-      const minimum = Number(quartile.replace('Q', '').replace('+', '').replace(' only', ''));
-      return quartile === 'Q1 only' ? rank === 1 : rank <= minimum;
-    }))
+    .filter((journal) => budget === 0 || (parseApcToNumber(journal.apc) !== null && (parseApcToNumber(journal.apc) as number) <= budget))
+    .filter((journal) => matchesQuartile(journal.quartile, quartile)))
     .map(({ journal, match }) => ({ journal, match, gaps: getGaps(text, journal) })), [text, field, indexing, quartile, budget]);
-  const matches = remoteMatches !== null ? remoteMatches : localMatches;
+  const matches = useMemo(() => {
+    const source = remoteMatches ?? localMatches;
+    return source.filter(({ journal }) => access === 'Any' || (access === 'OA / Free' ? journal.oa : !journal.oa));
+  }, [remoteMatches, localMatches, field, indexing, quartile, budget, access]);
   const noBudgetMatches = Boolean(text && budget > 0 && matches.length === 0);
   const noFilteredMatches = Boolean(text && remoteMatches !== null && matches.length === 0 && !noBudgetMatches);
 
@@ -230,6 +239,22 @@ export default function Home() {
   };
 
   useEffect(() => {
+    fetch('/api/account')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = await response.json() as { user?: { fullName?: string; email?: string } | null };
+        if (payload.user) setAccount({ fullName: payload.user.fullName || 'Author', email: payload.user.email || '' });
+      })
+      .catch(() => setAccount(null));
+
+    fetch('/api/payments')
+      .then((response) => response.json())
+      .then((payload: { plan?: 'free' | 'pro'; expiresAt?: string | null }) => {
+        const active = payload.plan === 'pro' && (!payload.expiresAt || new Date(payload.expiresAt).getTime() > Date.now());
+        setPlan(active ? 'pro' : 'free');
+      })
+      .catch(() => setPlan('free'));
+
     fetch('/api/index-stats')
       .then((response) => response.json())
       .then((payload: { indexes?: Array<{ name: string; count: number }> }) => setIndexStats(payload.indexes ?? []))
@@ -427,23 +452,72 @@ export default function Home() {
   const handlePayment = async (selectedPlan: 'pro' | 'manuscript') => {
     setPaymentLoading(true);
     try {
-      const response = await fetch('/api/payments', {
+      const loadCheckout = () => new Promise<void>((resolve, reject) => {
+        if (window.Razorpay) {
+          resolve();
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Unable to load Razorpay checkout.'));
+        document.body.appendChild(script);
+      });
+
+      await loadCheckout();
+      const response = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: selectedPlan, receipt: `submitcheck-${selectedPlan}-${Date.now()}` }),
       });
 
-      const payload = await response.json() as { demo?: boolean; error?: string; plan?: string; message?: string; order?: { id?: string; amount?: number } };
+      const payload = await response.json() as { error?: string; order_id?: string; amount?: number; currency?: string; key_id?: string; plan?: string };
       if (!response.ok) {
         throw new Error(payload.error || 'Unable to start payment.');
       }
 
-      setPlan(selectedPlan === 'manuscript' ? 'pro' : 'pro');
-      setShowPricing(false);
-      setSaveMessage(payload.demo ? payload.message || 'Demo checkout approved.' : `Payment initiated for ${payload.plan ?? selectedPlan}.`);
+      if (!window.Razorpay || !payload.order_id || !payload.key_id) {
+        throw new Error('Razorpay checkout is not available.');
+      }
+
+      const checkout = new window.Razorpay({
+        key: payload.key_id,
+        amount: payload.amount,
+        currency: payload.currency,
+        name: 'SubmitCheck',
+        description: selectedPlan === 'pro' ? 'Author Pro' : 'Per manuscript unlock',
+        order_id: payload.order_id,
+        handler: async (payment: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+          try {
+            const verification = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...payment, plan: selectedPlan }),
+            });
+            const result = await verification.json() as { error?: string; verified?: boolean };
+            if (!verification.ok || !result.verified) throw new Error(result.error || 'Payment verification failed.');
+            setPlan('pro');
+            setShowPricing(false);
+            setSaveMessage('Payment verified. Your SubmitCheck plan is now active.');
+            if (text.trim().length >= 50) void runMatch();
+          } catch (error) {
+            setSaveMessage(error instanceof Error ? error.message : 'Payment verification failed.');
+          } finally {
+            setPaymentLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaymentLoading(false);
+            setSaveMessage('Payment cancelled.');
+          },
+        },
+        theme: { color: '#1d4ed8' },
+      });
+      checkout.open();
     } catch (error) {
       setSaveMessage(error instanceof Error ? error.message : 'Unable to process payment.');
-    } finally {
       setPaymentLoading(false);
     }
   };
@@ -545,8 +619,7 @@ export default function Home() {
               <button className="btn btn-gold" onClick={() => setShowPricing(true)}>⭐ Upgrade</button>
             </div>
             <nav className="auth-nav" aria-label="Account">
-              <a className="auth-link" href="/login">Log in</a>
-              <a className="auth-link signup-link" href="/signup">Sign up</a>
+              {account ? <><a className="auth-link" href="/app">{account.fullName}<small>{account.email}</small></a><a className="auth-link signup-link" href="/app">Dashboard</a></> : <><a className="auth-link" href="/login">Log in</a><a className="auth-link signup-link" href="/signup">Sign up</a></>}
             </nav>
           </div>
         </div>
@@ -645,10 +718,10 @@ export default function Home() {
               </div>
             )}
           </section>
-          <section className="panel"><label className="panel-label">Narrow it down</label><div className="filters"><label>Field<select value={field} onChange={(event) => { const value = event.target.value; setField(value); void runMatch({ field: value }); }}><option>Any field</option>{scopusFields.map((subject) => <option key={subject}>{subject}</option>)}</select></label><label>Indexing<select value={indexing} onChange={(event) => { const value = event.target.value; setIndexing(value); void runMatch({ indexing: value }); }}><option>Any indexing</option>{indexStats.length ? indexStats.filter((item) => item.count > 0).map((item) => <option key={item.name} value={item.name}>{item.name} ({item.count.toLocaleString()} verified)</option>) : <option value="Scopus">Scopus</option>}</select></label><label>Quartile<select value={quartile} onChange={(event) => { const value = event.target.value; setQuartile(value); void runMatch({ quartile: value }); }}>{quartileOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label className="budget-filter">Budget <strong>{budget === 0 ? 'Any budget' : `${formatBudget(budget)} or less`}</strong><input type="range" min="0" max={maximumBudget} step="1000" value={budget} aria-label="Maximum publication budget" onChange={(event) => { const value = Number(event.target.value); setBudget(value); void runMatch({ budget: value }); }} /><span className="budget-range"><small>Any</small><small>₹1,000</small><small>{formatBudget(maximumBudget)}</small></span></label><label>Access<select><option>Any</option><option>OA / Free</option><option>Paid</option></select></label></div></section>
+          <section className="panel"><label className="panel-label">Narrow it down</label><div className="filters"><label>Field<select value={field} onChange={(event) => { const value = event.target.value; setField(value); void runMatch({ field: value }); }}><option>Any field</option>{scopusFields.map((subject) => <option key={subject}>{subject}</option>)}</select></label><label>Indexing<select value={indexing} onChange={(event) => { const value = event.target.value; setIndexing(value); void runMatch({ indexing: value }); }}><option>Any indexing</option>{indexStats.length ? indexStats.filter((item) => item.count > 0).map((item) => <option key={item.name} value={item.name}>{item.name} ({item.count.toLocaleString()} verified)</option>) : <option value="Scopus">Scopus</option>}</select></label><label>Quartile<select value={quartile} onChange={(event) => { const value = event.target.value; setQuartile(value); void runMatch({ quartile: value }); }}>{quartileOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label className="budget-filter">Budget <strong>{budget === 0 ? 'Any budget' : `${formatBudget(budget)} or less`}</strong><input type="range" min="0" max={maximumBudget} step="1000" value={budget} aria-label="Maximum publication budget" onChange={(event) => { const value = Number(event.target.value); setBudget(value); void runMatch({ budget: value }); }} /><span className="budget-range"><small>Any</small><small>₹1,000</small><small>{formatBudget(maximumBudget)}</small></span></label><label>Access<select value={access} onChange={(event) => setAccess(event.target.value)}><option>Any</option><option>OA / Free</option><option>Paid</option></select></label></div></section>
           <section className="panel journal-lookup-panel"><label className="panel-label">Check any journal directly <span className="hint">Search by journal name, publisher, or ISSN to see indexing and quartile details.</span></label><form className="journal-lookup-form" onSubmit={lookupJournal}><input value={journalLookupQuery} onChange={(event) => setJournalLookupQuery(event.target.value)} placeholder="e.g. Nature Reviews Cardiology, ISSN, or publisher" /><button className="btn btn-primary" type="submit" disabled={journalLookupLoading}>{journalLookupLoading ? 'Searching...' : 'Check journal'}</button></form>{journalLookupResults.length > 0 && <div className="journal-lookup-results">{journalLookupResults.map((journal) => { const details = journalLookupDetails[journal.id]; return <div className="lookup-result" key={journal.id}><div><strong>{journal.name}</strong><span>{journal.publisher} · {journal.field}</span><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}{journal.oa && <span className="tag oa">Open access</span>}</div></div><div className="lookup-actions">{journal.issn && <small>ISSN {journal.issn}</small>}<a className="btn-small journal-link" href={journal.submissionUrl || `https://www.google.com/search?q=${encodeURIComponent(`${journal.name} official journal website`)}`} target="_blank" rel="noreferrer">↗ Website</a>{(journal.issn || journal.eissn) && <button type="button" className="btn-small" onClick={() => lookupJournalDetails(journal)}>{details ? 'Refresh details' : 'APC/details'}</button>}</div>{details && <div className="lookup-details"><span><strong>APC:</strong> {details.amount ? `${details.amount} ${details.currency}` : 'Not listed'}</span><span><strong>Speed:</strong> {details.publicationWeeks ? `${details.publicationWeeks} weeks` : 'Not listed'}</span>{details.journalUrl && <a href={details.journalUrl} target="_blank" rel="noreferrer">Open official website</a>}{details.apcUrl ? <a href={details.apcUrl} target="_blank" rel="noreferrer">View APC source</a> : details.apcSearchUrl ? <a href={details.apcSearchUrl} target="_blank" rel="noreferrer">Find APC pricing</a> : null}</div>}</div>; })}</div>}</section>
           <div className="section-title">Matching journals <span>{text ? `${Math.min(matches.length, plan === 'pro' ? matches.length : 3)} matched by fit` : ''}</span></div>
-          {noBudgetMatches && <div className="empty">No journals with a verified APC are available under {formatBudget(budget)}. The Scopus catalog does not contain APC prices. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding verified no-APC journals...' : 'Find verified no-APC journals'}</button></div>}
+          {noBudgetMatches && <div className="empty">No journals with a verified APC are available under {formatBudget(budget)} after checking the catalog and available DOAJ/publisher APC sources. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding verified no-APC journals...' : 'Find verified no-APC journals'}</button></div>}
           {lowApcJournals.length > 0 && <section className="panel low-apc-results"><label className="panel-label">Verified no-APC journals <span className="hint">Source: DOAJ. These journals report no APC in their DOAJ record; confirm current publisher policies before submission.</span></label>{lowApcJournals.map((journal) => <div className="lookup-result" key={`${journal.title}-${journal.publisher}`}><div><strong>{journal.title}</strong><span>{journal.publisher} · {journal.subjects.slice(0, 2).join(', ') || 'Subject not listed'}</span></div><div className="lookup-actions">{journal.journalUrl && <a className="btn-small journal-link" href={journal.journalUrl} target="_blank" rel="noreferrer">↗ Website</a>}{journal.instructionsUrl && <a className="btn-small" href={journal.instructionsUrl} target="_blank" rel="noreferrer">Instructions</a>}</div></div>)}</section>}
           {noFilteredMatches && <div className="empty">No journals match every selected filter. Try Any quartile, Any indexing, or a broader field. Some catalog journals are unranked and do not have verified APC data.</div>}
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}

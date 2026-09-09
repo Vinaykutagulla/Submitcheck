@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-  timeout: 20000,
-});
+import { anthropic } from '@/lib/claude';
 
 type GapAnalysisRequest = {
   manuscriptText?: unknown;
@@ -14,12 +9,20 @@ type GapAnalysisRequest = {
 };
 
 export async function POST(request: Request) {
+  let body: GapAnalysisRequest;
+
   try {
-    const body = (await request.json()) as GapAnalysisRequest;
-    const manuscriptText = typeof body.manuscriptText === 'string' ? body.manuscriptText : '';
-    const journalName = typeof body.journalName === 'string' ? body.journalName : 'target journal';
-    const journalField = typeof body.journalField === 'string' ? body.journalField : 'general research';
-    const articleType = typeof body.articleType === 'string' ? body.articleType : 'research';
+    body = (await request.json()) as GapAnalysisRequest;
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON request body.' }, { status: 400 });
+  }
+
+  const manuscriptText = typeof body.manuscriptText === 'string' ? body.manuscriptText : '';
+  const journalName = typeof body.journalName === 'string' ? body.journalName : 'target journal';
+  const journalField = typeof body.journalField === 'string' ? body.journalField : 'general research';
+  const articleType = typeof body.articleType === 'string' ? body.articleType : 'research';
+
+  try {
 
     if (!manuscriptText.trim()) {
       return NextResponse.json({ error: 'Manuscript text is required.' }, { status: 400 });
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({
         usesFallback: true,
-        gaps: heuristicallyGenerateGaps(manuscriptText, journalName, journalField, articleType),
+        gaps: heuristicallyGenerateGaps(manuscriptText, journalName, journalField),
       });
     }
 
@@ -53,7 +56,7 @@ Focus on clear, actionable journal-fit and revision issues. Keep it concise and 
 `;
 
     const completion = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-latest',
+      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
       max_tokens: 1200,
       temperature: 0.3,
       system: 'You are a strict academic editor helping plan manuscript revisions. Output valid JSON only.',
@@ -62,17 +65,20 @@ Focus on clear, actionable journal-fit and revision issues. Keep it concise and 
 
     const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
     const parsed = safeJsonParse(content);
-    const gaps = Array.isArray(parsed?.gaps) && parsed.gaps.length ? parsed.gaps : heuristicallyGenerateGaps(manuscriptText, journalName, journalField, articleType);
+    const gaps = Array.isArray(parsed?.gaps) && parsed.gaps.length ? parsed.gaps : heuristicallyGenerateGaps(manuscriptText, journalName, journalField);
 
     return NextResponse.json({ usesFallback: false, gaps });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Claude gap analysis failed:', error.message);
+    }
+
     return NextResponse.json({
       usesFallback: true,
       gaps: heuristicallyGenerateGaps(
-        typeof (await request.clone().json()).manuscriptText === 'string' ? (await request.clone().json()).manuscriptText : '',
-        'target journal',
-        'general research',
-        'research',
+        manuscriptText,
+        journalName,
+        journalField,
       ),
     });
   }
@@ -90,9 +96,7 @@ function heuristicallyGenerateGaps(
   manuscriptText: string,
   journalName: string,
   journalField: string,
-  articleType: string,
 ) {
-  const text = manuscriptText.toLowerCase();
   const gaps = [] as Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; title: string; description: string; example: string }>;
 
   if (!/abstract\s*:/i.test(manuscriptText)) {

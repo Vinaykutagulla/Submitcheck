@@ -16,6 +16,16 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Import SCImago metadata
+
+Export a SCImago journal list as CSV or XLSX with journal title or ISSN, quartile, and APC columns, then run:
+
+```bash
+npm run import:scimago -- "C:\path\to\scimago-export.xlsx"
+```
+
+The importer matches journals by ISSN first, then title, and updates quartile, APC, and publisher URL metadata used by the filters. Keep the export local because it can contain licensed metadata.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
