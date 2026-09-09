@@ -6,6 +6,7 @@ type GapAnalysisRequest = {
   journalName?: unknown;
   journalField?: unknown;
   articleType?: unknown;
+  journalRequirements?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -21,6 +22,9 @@ export async function POST(request: Request) {
   const journalName = typeof body.journalName === 'string' ? body.journalName : 'target journal';
   const journalField = typeof body.journalField === 'string' ? body.journalField : 'general research';
   const articleType = typeof body.articleType === 'string' ? body.articleType : 'research';
+  const journalRequirements = body.journalRequirements && typeof body.journalRequirements === 'object'
+    ? JSON.stringify(body.journalRequirements)
+    : '{}';
 
   try {
 
@@ -42,17 +46,22 @@ Each item must contain:
 - id: short string
 - priority: "critical" or "important"
 - icon: "❌" or "🟡"
-- title: short string
-- description: string
-- example: string
+- location: section name or "whole manuscript"
+- evidence: short exact quote or precise description of what is present/missing
+- title: a specific issue tied to this manuscript section
+- description: explain what the manuscript currently says or omits, why it conflicts with the target journal, and what to change
+- example: replacement-ready wording, structure, or concrete edit; never use a generic placeholder like "add more detail"
 
 Goal: identify missing or weak manuscript elements for the journal ${journalName} in ${journalField}.
 Manuscript type: ${articleType}
 
+Target journal requirements (treat these as constraints):
+${journalRequirements}
+
 Manuscript text:
 ${manuscriptText.slice(0, 25000)}
 
-Focus on clear, actionable journal-fit and revision issues. Keep it concise and practical.
+Read the manuscript closely before answering. Identify exact sections or phrases when possible. Do not return generic checks without naming the missing claim, section, or evidence. Prioritize issues that could cause editorial rejection, then journal-format mismatches. Return at most 6 high-value fixes. Keep every fix practical and specific to this manuscript and journal.
 `;
 
     const completion = await anthropic.messages.create({

@@ -174,7 +174,7 @@ export default function Home() {
   const [savedManuscripts, setSavedManuscripts] = useState<Array<{ id: string; title: string; raw_text: string; created_at: string }>>([]);
   const [savedMatches, setSavedMatches] = useState<Array<{ id: string; manuscript_id: string; journal_id: string; fit_score: number; gaps: Array<{ title?: string; description?: string }>; created_at: string }>>([]);
   const [activeManuscriptId, setActiveManuscriptId] = useState<string | null>(null);
-  const [aiGaps, setAiGaps] = useState<Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; title: string; description: string; example: string }>>([]);
+  const [aiGaps, setAiGaps] = useState<Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>>([]);
   const [gapLoading, setGapLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [serviceType, setServiceType] = useState('Manuscript');
@@ -431,10 +431,19 @@ export default function Home() {
           journalName: journalOverride?.name ?? selected?.name ?? 'target journal',
           journalField: journalOverride?.field ?? selected?.field ?? field,
           articleType: 'research',
+          journalRequirements: {
+            quartile: journalOverride?.quartile ?? selected?.quartile ?? 'Unranked',
+            openAccess: journalOverride?.oa ?? selected?.oa ?? false,
+            apc: journalOverride?.apc ?? selected?.apc ?? 'Not verified',
+            scope: journalOverride?.scope ?? selected?.scope ?? [],
+            abstract: journalOverride?.requirements.abstract ?? selected?.requirements.abstract ?? 'unstructured',
+            wordLimit: journalOverride?.requirements.wordLimit ?? selected?.requirements.wordLimit ?? null,
+            referenceStyle: journalOverride?.requirements.refStyle ?? selected?.requirements.refStyle ?? 'Not specified',
+          },
         }),
       });
 
-      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; title: string; description: string; example: string }>; usesFallback?: boolean; error?: string };
+      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; usesFallback?: boolean; error?: string };
 
       if (!response.ok || !payload.gaps) {
         throw new Error(payload.error || 'Unable to generate suggestions.');
@@ -710,6 +719,7 @@ export default function Home() {
                   {aiGaps.map((gap) => (
                     <div key={gap.id} className="panel" style={{ padding: 16 }}>
                       <div style={{ fontWeight: 700 }}>{gap.icon} {gap.title}</div>
+                      {(gap.location || gap.evidence) && <div style={{ marginTop: 7, color: 'var(--shu)', fontSize: 12 }}><strong>{gap.location || 'Manuscript evidence'}</strong>{gap.evidence ? ` · ${gap.evidence}` : ''}</div>}
                       <div style={{ marginTop: 6, color: 'var(--muted)' }}>{gap.description}</div>
                       <pre style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>{gap.example}</pre>
                     </div>
