@@ -39,7 +39,7 @@ export type JournalMatchResult = {
 const fieldSignals: Record<string, string[]> = {
   'Life Sciences': ['drug', 'pharmaceut', 'clinical', 'cell', 'protein', 'nanomedicine', 'formulation', 'biology', 'patient'],
   Chemistry: ['chemistry', 'synthesis', 'molecule', 'reaction', 'catalyst', 'polymer', 'spectroscopy', 'chemical'],
-  Engineering: ['engineering', 'design', 'prototype', 'optimization', 'mechanical', 'process', 'simulation', 'device'],
+  Engineering: ['engineering', 'prototype', 'mechanical', 'device', 'structural design'],
   'Computer Science': ['algorithm', 'machine learning', 'software', 'dataset', 'neural network', 'computer', 'model'],
   Physics: ['physics', 'quantum', 'particle', 'material', 'energy', 'optical', 'magnetic'],
   'Social Sciences': ['survey', 'policy', 'education', 'social', 'behavior', 'psychology', 'interview', 'qualitative'],
@@ -48,11 +48,15 @@ const fieldSignals: Record<string, string[]> = {
 
 const topicFamilies: Record<string, string[]> = {
   pharmaceutics: ['pharmaceut', 'drug delivery', 'formulation', 'dissolution', 'solid dispersion', 'dosage'],
+  pharmacology: ['anti-inflammatory', 'inflammatory', 'cytotoxicity', 'cytotoxic', 'pharmacolog', 'therapeutic', 'akt inhibitor', 'raw 264.7'],
+  'natural products': ['plant extract', 'phytochemical', 'phytoconstituent', 'flavonoid', 'coumarin', 'stilbene', 'terpenoid', 'phenol', 'medicinal plant', 'herbal'],
+  'analytical profiling': ['lc-ms', 'lc-esi', 'qtof', 'hrms', 'metabolite profiling', 'mass spectrometry'],
+  'molecular pharmacology': ['protein-ligand', 'molecular docking', 'molecular dynamics', 'binding affinity', 'admet', 'drug-likeness'],
   'drug delivery': ['drug delivery', 'nanomedicine', 'nanoparticle', 'release', 'formulation'],
   chemistry: ['chemistry', 'chemical', 'molecule', 'synthesis', 'reaction', 'spectroscopy'],
   synthesis: ['synthesis', 'synthesized', 'reaction', 'compound', 'molecule'],
   'machine learning': ['machine learning', 'deep learning', 'neural network', 'algorithm', 'classifier'],
-  engineering: ['engineering', 'design', 'prototype', 'optimization', 'simulation', 'device'],
+  engineering: ['engineering', 'design', 'prototype', 'mechanical', 'device'],
   education: ['education', 'student', 'teaching', 'classroom', 'university'],
   psychology: ['psychology', 'behavior', 'cognitive', 'mental health', 'participants'],
   medicine: ['patient', 'clinical', 'diagnosis', 'treatment', 'disease', 'health'],
@@ -60,10 +64,7 @@ const topicFamilies: Record<string, string[]> = {
 };
 
 const stopWords = new Set('about after again against also among because before being between both could does during each from further have having into itself more most other over same should some such than their there these they this those through under very what when where which while with would your'.split(' '));
-
-function includesAny(text: string, terms: string[]) {
-  return terms.some((term) => text.includes(term));
-}
+const genericMatchWords = new Set(['molecular', 'dynamics', 'network', 'simulation', 'model', 'study', 'research', 'analysis', 'method', 'methods', 'results', 'abstract', 'in-vitro', 'vitro']);
 
 function countWords(text: string) {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -85,6 +86,7 @@ function extractKeywords(text: string) {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 15)
+    .filter(([word]) => !genericMatchWords.has(word))
     .map(([word]) => word);
 }
 
@@ -104,8 +106,10 @@ export function profileManuscript(text: string): ManuscriptProfile {
         : /methods|participants|sample size|experiment|we conducted/.test(lower)
           ? 'Research'
           : 'Unknown';
-  const topics = Object.entries(topicFamilies).filter(([, terms]) => includesAny(lower, terms)).map(([topic]) => topic);
-  const methods = ['survey', 'interview', 'randomized', 'in vitro', 'in vivo', 'simulation', 'regression', 'qualitative', 'systematic review']
+  const topics = Object.entries(topicFamilies)
+    .filter(([topic, terms]) => terms.filter((term) => lower.includes(term)).length >= (topic === 'engineering' ? 2 : 1))
+    .map(([topic]) => topic);
+  const methods = ['lc-ms', 'mass spectrometry', 'molecular docking', 'molecular dynamics', 'admet', 'survey', 'interview', 'randomized', 'in vitro', 'in vivo', 'regression', 'qualitative', 'systematic review']
     .filter((method) => lower.includes(method));
 
   return {
@@ -130,14 +134,17 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal):
   const reasons: string[] = [];
   const warnings: string[] = [];
   const journalText = `${journal.name} ${journal.publisher ?? ''} ${journal.field} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
-  const matchingKeywords = profile.keywords.filter((keyword) => journalText.includes(keyword));
+  const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && journalText.includes(keyword));
   const matchingTopics = profile.topics.filter((topic) => journalText.includes(topic) || topicFamilies[topic].some((term) => journalText.includes(term)));
-  const fieldFit = journal.field === profile.field ? 30 : journal.field === 'Multidisciplinary' ? 20 : 0;
+  const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory/.test(journalText);
+  const biomedicalProfile = profile.topics.some((topic) => ['pharmacology', 'natural products', 'molecular pharmacology', 'analytical profiling'].includes(topic)) || profile.field === 'Life Sciences' || profile.field === 'Medicine';
+  const fieldFit = journal.field === profile.field ? 30 : biomedicalProfile && biomedicalJournal ? 26 : journal.field === 'Multidisciplinary' ? 20 : 0;
   const scopeFit = journal.scope.length ? Math.min(30, Math.round((matchingTopics.length / Math.min(journal.scope.length, 3)) * 30)) : 0;
   const keywordFit = Math.min(25, matchingKeywords.length * 5);
+  const biomedicalFit = biomedicalProfile && biomedicalJournal ? 12 : 0;
   const articleFit = profile.articleType === 'Unknown' ? 8 : journal.name.toLowerCase().includes(profile.articleType.toLowerCase()) ? 15 : 10;
   const requirementFit = journal.requirements.wordLimit === null ? 0 : profile.words <= journal.requirements.wordLimit ? 10 : 0;
-  let score = fieldFit + scopeFit + keywordFit + articleFit + requirementFit;
+  let score = fieldFit + scopeFit + keywordFit + articleFit + requirementFit + biomedicalFit;
 
   if (fieldFit >= 30) reasons.push(`Strong ${profile.field} field alignment`);
   else if (fieldFit === 20) reasons.push('Broad multidisciplinary scope can accommodate this field');
