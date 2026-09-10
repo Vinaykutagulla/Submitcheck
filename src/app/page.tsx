@@ -863,20 +863,6 @@ export default function Home() {
     await navigator.clipboard.writeText(value);
     setCopiedSubmissionField(label);
   };
-  const allChecks = [
-    ['Manuscript has enough content', text.trim().length > 500],
-    ['Title is present', title.trim().length > 3 || /^title\s*:/im.test(text)],
-    ['Abstract present', /abstract\s*:/i.test(text)],
-    ['Keywords present', /keywords?\s*:/i.test(text)],
-    ['Methods or study design present', /methods?|study design|methodology/i.test(text)],
-    ['Results or findings present', /results?|findings?|outcomes?/i.test(text)],
-    ['References present', /references?/i.test(text)],
-    ['Novelty statement present', /novel|original|first|contribution|innovation/i.test(text)],
-    ['Limitations discussed', /limitation|future work|future directions/i.test(text)],
-    ['Formatting reviewed', formatDone],
-    ['Target journal selected', Boolean(selected)],
-  ];
-
   return (
     <main className="jmatch-shell">
       <header className="letterhead">
@@ -1004,7 +990,7 @@ export default function Home() {
 
         {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
-        {step === 4 && <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="quick-tip">We check what matters. No fake AI-detection percentages — honest signals and readiness checks.</div><button className="btn btn-primary" onClick={() => plan === 'pro' ? setVerifyDone(true) : setShowPricing(true)}>🔍 Run checks</button></div>{verifyDone ? <div className="panel rules"><div className="verdict yellow">{allChecks.filter(([, done]) => done).length}/{allChecks.length} checks passed</div>{allChecks.map(([label, done]) => <p key={label as string}><span>{label as string}</span><strong className={done ? 'pass' : 'warn'}>{done ? '✅ Pass' : '⚠️ Check'}</strong></p>)}</div> : <div className="locked-card"><div className="blur-line tall">Completeness, references, declarations, and writing-quality signals</div><div className="locked-overlay">🔒<strong>Integrity checks are a Pro feature</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock verify</button></div></div>}</section>}
+        {step === 4 && (selected ? <section className="view"><VerifyPanel selected={selected} text={text} plan={plan} onUnlock={() => setShowPricing(true)} onCompleted={() => setVerifyDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="empty">🔍<br />Select a journal first to run submission-readiness checks.</div></div></section>)}
 
         {step === 5 && <section className="view"><div className="panel"><label className="panel-label">Submission package <span className="hint">Review every field and declaration before opening the publisher portal.</span></label>{[['📄 Manuscript is complete', text.length > 200], ['🎯 Target journal selected', !!selected], ['🔧 Gaps fixed', chosenGaps.filter((gap) => gap.priority === 'critical').every((gap) => fixed.includes(gap.title))], ['📐 Formatting reviewed', formatDone], ['🔍 Integrity checks completed', verifyDone]].map(([label, done]) => <p className="check-row" key={label as string}><span>{done ? '✅' : '⬜'}</span>{label as string}</p>)}{selected ? <div className="submission-package"><SubmissionField label="Title" value={title || text.match(/^title\s*:\s*(.+)$/im)?.[1] || 'Add a manuscript title'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><SubmissionField label="Abstract" value={manuscriptAbstract || 'Abstract not detected. Add it before submission.'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><SubmissionField label="Keywords" value={manuscriptKeywords || 'Keywords not detected. Add 4-8 terms.'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><label>Corresponding author<input value={authorName} onChange={(event) => setAuthorName(event.target.value)} placeholder="Full name" /></label><label>Affiliation<input value={authorAffiliation} onChange={(event) => setAuthorAffiliation(event.target.value)} placeholder="University, department, country" /></label><label>ORCID (optional)<input value={authorOrcid} onChange={(event) => setAuthorOrcid(event.target.value)} placeholder="0000-0000-0000-0000" /></label><label>Funding statement<textarea value={fundingStatement} onChange={(event) => setFundingStatement(event.target.value)} /></label><label>Competing interests<textarea value={conflictStatement} onChange={(event) => setConflictStatement(event.target.value)} /></label><label>Data availability statement<textarea value={dataStatement} onChange={(event) => setDataStatement(event.target.value)} /></label><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => setDeclarationsConfirmed(event.target.checked)} /> I confirm that author details, ethics, funding, conflicts, data availability, and manuscript content are accurate.</label></div> : <div className="submission-package-empty"><strong>Select a target journal first.</strong><span>Go to Find, choose a journal, then return here to prepare the submission package.</span></div>}<div className="submit-status">{plan === 'pro' && selected && formatDone && verifyDone && declarationsConfirmed ? 'Ready for author-controlled submission.' : 'Complete all checks and confirm declarations before submission.'}</div><button className="btn btn-success" disabled={!selected || !declarationsConfirmed} onClick={() => { if (selected) window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank'); }}>📤 Open journal submission portal</button></div></section>}
       </div>
@@ -1082,6 +1068,41 @@ function FormatPanel({ selected, text, onUnlock, onReviewed }: { selected: Journ
   };
 
   return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div><button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button></div><div className="live-instructions"><div><strong>{liveInstructions ? 'Live source checked' : 'Live instructions not checked'}</strong><span>{liveInstructions ? `${liveInstructions.source} · ${new Date(liveInstructions.checkedAt).toLocaleTimeString()}` : 'Fetch the publisher or DOAJ author instructions before submission.'}</span></div><div className="live-instruction-actions"><button className="btn-small" onClick={fetchInstructions} disabled={fetchingInstructions}>{fetchingInstructions ? 'Checking...' : 'Fetch live rules'}</button>{liveInstructions?.url && <a className="btn-small" href={liveInstructions.url} target="_blank" rel="noreferrer">Open source</a>}</div></div><div className="format-summary"><strong>{openRules.length === 0 ? 'All rules reviewed' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><button className="btn btn-primary btn-small" onClick={fixAll} disabled={openRules.length === 0}>Fix all</button></div>{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Mismatch'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{!done && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
+}
+
+function VerifyPanel({ selected, text, plan, onUnlock, onCompleted }: { selected: Journal; text: string; plan: 'free' | 'pro'; onUnlock: () => void; onCompleted: () => void }) {
+  const [ran, setRan] = useState(false);
+  const titlePresent = Boolean(titleFromManuscript(text));
+  const abstractPresent = Boolean(text.match(/abstract\s*:?\s*[\s\S]*?(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[0]);
+  const keywordsPresent = Boolean(text.match(/keywords?\s*:?\s*[^\n]+/i));
+  const methodsPresent = /(?:^|\n)\s*(?:\d+\.?\s*)?(?:methods?|materials and methods|methodology)\b/i.test(text);
+  const resultsPresent = /(?:^|\n)\s*(?:\d+\.?\s*)?(?:results?|findings?)\b/i.test(text);
+  const referencesPresent = /(?:^|\n)\s*references?\b/i.test(text);
+  const basicChecks = [
+    { id: 'title', label: 'Title is present', detail: titlePresent ? 'A manuscript title was detected.' : 'Add a title before submission.', pass: titlePresent },
+    { id: 'abstract', label: 'Abstract is present', detail: abstractPresent ? 'Abstract text detected.' : 'Add an abstract before submission.', pass: abstractPresent },
+    { id: 'keywords', label: 'Keywords are present', detail: keywordsPresent ? 'Keywords detected.' : 'Add 4–8 keywords.', pass: keywordsPresent },
+    { id: 'methods', label: 'Methods section is present', detail: methodsPresent ? 'Methods section detected.' : 'Methods section not detected.', pass: methodsPresent },
+    { id: 'results', label: 'Results section is present', detail: resultsPresent ? 'Results section detected.' : 'Results section not detected.', pass: resultsPresent },
+    { id: 'references', label: 'References are present', detail: referencesPresent ? 'Reference section detected.' : 'Reference section not detected.', pass: referencesPresent },
+  ];
+  const deepChecks = [
+    { label: 'Journal-specific requirements', detail: `${selected.name} · ${selected.requirements.abstract} abstract · ${selected.requirements.refStyle} references`, pass: false },
+    { label: 'Statistical reporting', detail: 'Check sample size, replicates, controls, tests, and uncertainty.', pass: false },
+    { label: 'Declarations and ethics', detail: 'Check funding, conflicts, ethics, and data availability statements.', pass: false },
+    { label: 'Reference consistency', detail: 'Check citation-reference matching and incomplete reference signals.', pass: false },
+  ];
+  const passed = basicChecks.filter((check) => check.pass).length;
+  const runChecks = () => {
+    if (plan !== 'pro') {
+      setRan(true);
+      return;
+    }
+    setRan(true);
+    onCompleted();
+  };
+
+  return <div className="verify-workspace"><div className="verify-manuscript"><div className="format-page"><div className="format-title">{titleFromManuscript(text) || 'Untitled manuscript'}</div><div className="format-meta">Submission-readiness preview · {selected.name}</div><div className="format-divider" /><h3>Detected manuscript sections</h3><div className="verify-section-list">{basicChecks.map((check) => <div className={check.pass ? 'verify-section pass' : 'verify-section warn'} key={check.id}><span>{check.pass ? '✓' : '!'}</span><strong>{check.label}</strong></div>)}</div><h3>Readiness note</h3><p>{passed === basicChecks.length ? 'The basic manuscript structure is present. Review journal-specific checks before submission.' : 'Some basic manuscript components need attention before submission.'}</p></div></div><aside className="verify-rail"><div className="verify-rail-head"><div><strong>Integrity and readiness</strong><span>{selected.name}</span></div><span className="verify-count">{ran ? `${passed}/${basicChecks.length} basic checks` : 'Not run'}</span></div><div className={`verify-summary ${ran && passed < basicChecks.length ? 'needs-review' : ''}`}><strong>{!ran ? 'Ready to run basic checks' : passed === basicChecks.length ? 'Basic checks passed' : 'Needs attention'}</strong><button className="btn btn-primary btn-small" onClick={runChecks}>{ran ? 'Run again' : 'Run checks'}</button></div><div className="verify-check-group"><div className="verify-group-label">Basic checks · Free</div>{basicChecks.map((check) => <div className={`verify-check-card ${check.pass ? 'pass' : 'warn'}`} key={check.id}><div><strong>{check.label}</strong><p>{check.detail}</p></div><span>{ran ? (check.pass ? 'Pass' : 'Needs review') : 'Pending'}</span></div>)}</div><div className="verify-check-group"><div className="verify-group-label">Deep review · Pro</div>{deepChecks.map((check) => <div className="verify-check-card locked" key={check.label}><div><strong>{check.label}</strong><p>{check.detail}</p></div><span>🔒 Pro</span></div>)}<button className="btn btn-gold verify-upgrade" onClick={onUnlock}>Unlock deep verification</button></div></aside></div>;
 }
 
 function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal, nextStep?: number) => void }) {
