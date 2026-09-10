@@ -401,7 +401,7 @@ export default function Home() {
   const [account, setAccount] = useState<{ fullName: string; email: string } | null>(null);
   const [text, setText] = useState('');
   const [manuscriptVisualHtml, setManuscriptVisualHtml] = useState('');
-  const [embeddedMedia, setEmbeddedMedia] = useState<Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>>([]);
+  const embeddedMedia: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> = [];
   const [title, setTitle] = useState('');
   const [field, setField] = useState('Any field');
   const [indexing, setIndexing] = useState('Any indexing');
@@ -557,7 +557,6 @@ export default function Home() {
       setTitle(extracted.title);
       setText(extracted.text);
       setManuscriptVisualHtml(extracted.visualHtml || '');
-      setEmbeddedMedia(extracted.embeddedMedia || []);
       setRemoteMatches(null);
       setSelected(null);
       setAiGaps([]);
@@ -1175,7 +1174,7 @@ function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: J
   return <article className={sponsored ? 'journal-card sponsored' : 'journal-card'}>{sponsored && <div className="sponsor-flag">⭐ Sponsored · Featured</div>}<div className="journal-head"><div><h3>{journal.name}</h3><p>{journal.publisher} · {journal.field}</p><a className="journal-website-top" href={websiteUrl} target="_blank" rel="noreferrer">↗ {websiteLabel}</a><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.oa && <span className="tag oa">Free-to-publish</span>}{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}</div></div><div className="fit"><span>Scientific fit: <b className={match.score > 80 ? 'score-good' : 'score-caution'}>{match.score}%</b></span><em className={gaps.some((gap) => gap.priority === 'critical') ? 'concerns' : 'good'}>{match.confidence} confidence</em></div></div><div className="journal-meta"><span><small>APC</small>{liveApc?.amount ? `${liveApc.amount.toLocaleString()} ${liveApc.currency}` : 'Not verified'}</span><span><small>Speed</small>{liveApc?.publicationWeeks ? `${liveApc.publicationWeeks} weeks` : 'Not verified'}</span><span><small>Gaps found</small>{gaps.length}</span><span><small>Word limit</small>{journal.requirements.wordLimit ? `${journal.requirements.wordLimit} words` : 'Not listed'}</span></div><div className="match-reasons"><strong>Why this match</strong>{match.reasons.slice(0, 2).map((reason) => <span key={reason}>✓ {reason}</span>)}{match.warnings.slice(0, 1).map((warning) => <span className="warning" key={warning}>! {warning}</span>)}</div><div className="journal-actions"><button className="btn-small primary-btn" onClick={() => onSelect(journal)}>🔧 Fix</button><button className="btn-small" onClick={() => onSelect(journal)}>📐 Format</button>{(journal.issn || journal.eissn) && <button className="btn-small" onClick={checkLiveApc} disabled={apcLoading}>{apcLoading ? 'Fetching APC & speed...' : liveApc ? (liveApc.amount || liveApc.publicationWeeks ? '✓ Live details loaded' : 'No live details found') : 'Fetch APC & speed'}</button>}{liveApc?.apcUrl ? <a className="btn-small journal-link" href={liveApc.apcUrl} target="_blank" rel="noreferrer">↗ View APC source</a> : liveApc?.apcSearchUrl ? <a className="btn-small journal-link" href={liveApc.apcSearchUrl} target="_blank" rel="noreferrer">↗ Find APC pricing</a> : null}</div>{liveApc?.journalUrl ? <div className="live-source">Website fetched from {liveApc.source} · <a href={liveApc.journalUrl} target="_blank" rel="noreferrer">Open website</a></div> : liveApc?.apcSearchUrl ? <div className="live-source">No structured APC record found; search publisher pricing before submission.</div> : null}</article>;
 }
 
-function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextChange, title, appliedDrafts, visualHtml, embeddedMedia }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> }) {
+function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextChange, title, appliedDrafts, visualHtml }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia?: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> }) {
   void visualHtml;
   const visible = plan === 'pro' ? gaps : [];
   const [copied, setCopied] = useState<string | null>(null);
@@ -1186,7 +1185,14 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || editor.textContent === text) return;
+    if (!editor) return;
+    if (visualHtml) {
+      if (editor.dataset.visualHtml === visualHtml) return;
+      editor.innerHTML = visualHtml;
+      editor.dataset.visualHtml = visualHtml;
+      return;
+    }
+    delete editor.dataset.visualHtml;
     const matches = sentenceSuggestions
       .map((item) => ({ item, start: text.indexOf(item.sentence) }))
       .filter((match) => match.start >= 0)
@@ -1206,37 +1212,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     });
     fragment.append(text.slice(cursor));
     editor.replaceChildren(fragment);
-    embeddedMedia.forEach((media) => {
-      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
-      let node: Node | null = walker.nextNode();
-      let inserted = false;
-      while (node) {
-        const value = node.textContent || '';
-        const anchor = media.afterText.trim();
-        const position = anchor ? value.lastIndexOf(anchor) : -1;
-        if (position >= 0) {
-          const range = document.createRange();
-          range.setStart(node, position + anchor.length);
-          range.collapse(true);
-          const embedded = document.createElement('div');
-          embedded.className = 'embedded-document-inline';
-          embedded.contentEditable = 'false';
-          embedded.innerHTML = media.html;
-          range.insertNode(embedded);
-          inserted = true;
-          break;
-        }
-        node = walker.nextNode();
-      }
-      if (!inserted) {
-        const embedded = document.createElement('div');
-        embedded.className = 'embedded-document-inline';
-        embedded.contentEditable = 'false';
-        embedded.innerHTML = media.html;
-        editor.appendChild(embedded);
-      }
-    });
-  }, [text, sentenceSuggestions, visualHtml, embeddedMedia]);
+  }, [text, sentenceSuggestions, visualHtml]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -1281,10 +1257,9 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     if (!editor) return;
     const handleInput = (event: Event) => {
       const target = event.currentTarget as HTMLElement;
-      const editorText = Array.from(target.childNodes)
-        .filter((node) => !(node instanceof HTMLElement && node.classList.contains('embedded-document-inline')))
-        .map((node) => node.textContent ?? '')
-        .join('');
+      const textClone = target.cloneNode(true) as HTMLElement;
+      textClone.querySelectorAll('table, img, figure, .embedded-document-inline').forEach((node) => node.remove());
+      const editorText = textClone.textContent ?? '';
       event.stopImmediatePropagation();
       onTextChange(editorText);
     };
