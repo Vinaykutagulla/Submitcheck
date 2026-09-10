@@ -15,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.123.0",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.114.0",
+    "docx": "^9.7.1",
     "mammoth": "^1.12.2",
     "next": "16.3.4",
     "pdf-parse": "^2.4.5",

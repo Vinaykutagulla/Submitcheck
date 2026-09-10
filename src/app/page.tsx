@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Document, InsertedTextRun, Packer, Paragraph, TextRun } from 'docx';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { parseUploadedManuscript } from '@/lib/upload-utils';
-import { rankJournals } from '@/utils/decisionTreeMatcher';
+import { profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
 import { SubmissionField } from '@/components/SubmissionField';
 
 declare global {
@@ -28,6 +29,8 @@ type Journal = {
   sponsored?: boolean;
   requirements: { abstract: 'structured' | 'unstructured'; wordLimit: number | null; refStyle: string };
 };
+
+const localProPreview = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_LOCAL_PRO_PREVIEW === 'true';
 
 const sample = `Title: Amorphous solid dispersions for enhancing solubility of poorly water-soluble drugs
 
@@ -74,7 +77,6 @@ const scopusFields = [
   'Physics and Astronomy', 'Psychology', 'Social Sciences', 'Veterinary', 'Dentistry', 'Health Professions',
 ];
 
-const indexingServices = ['Any indexing', 'Scopus', 'WoS', 'PubMed', 'Embase', 'DOAJ', 'CINAHL', 'ERIC', 'PsycINFO', 'INSPEC', 'Ei Compendex', 'MathSciNet', 'EBSCO'];
 const quartileOptions = ['Any quartile', 'Q1 only', 'Q2 only', 'Q3 only', 'Q4 only'];
 const maximumBudget = 500000;
 
@@ -91,6 +93,71 @@ function parseApcToNumber(rawApc: string | undefined | null) {
 
 function formatBudget(value: number) {
   return `₹${value.toLocaleString('en-IN')}`;
+}
+
+function inferDraftAnchor(title: string) {
+  const lower = title.toLowerCase();
+
+  if (/(abstract|summary)/i.test(lower)) return 'abstract';
+  if (/(methods?|methodology|experimental)/i.test(lower)) return 'methods';
+  if (/(results?|findings?|outcomes?)/i.test(lower)) return 'results';
+  if (/(discussion)/i.test(lower)) return 'discussion';
+  if (/(limitations?|future work|future directions)/i.test(lower)) return 'limitations';
+  if (/(conclusion|novelty|innovation)/i.test(lower)) return 'conclusion';
+  if (/(references?|citation|apa)/i.test(lower)) return 'references';
+
+  return 'end';
+}
+
+function detectSectionName(line: string) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  const normalized = trimmed.toLowerCase();
+
+  if (/^title\s*:/i.test(trimmed)) return 'title';
+  if (/^abstract\s*:/i.test(trimmed)) return 'abstract';
+  if (/^keywords?\s*:/i.test(trimmed)) return 'keywords';
+  if (/^(?:\d+\.|\s*)?(introduction|background)\b/i.test(trimmed)) return 'introduction';
+  if (/^(?:\d+\.|\s*)?(materials and methods|methods?|methodology|experimental)\b/i.test(trimmed)) return 'methods';
+  if (/^(?:\d+\.|\s*)?(results?|findings?|outcomes?)\b/i.test(trimmed)) return 'results';
+  if (/^(?:\d+\.|\s*)?(discussion)\b/i.test(trimmed)) return 'discussion';
+  if (/^(?:\d+\.|\s*)?(conclusion|summary)\b/i.test(trimmed)) return 'conclusion';
+  if (/^(?:\d+\.|\s*)?(limitations?|future work|future directions)\b/i.test(trimmed)) return 'limitations';
+  if (/^(?:\d+\.|\s*)?(references?)\b/i.test(trimmed)) return 'references';
+
+  if (/^\d+\.?\s*\w+/i.test(trimmed) && !/^\d+\.?\s*\d+/.test(trimmed)) {
+    return normalized.replace(/^[^a-z]+/, '').replace(/[^a-z ]/g, '').trim().split(' ')[0] || null;
+  }
+
+  return null;
+}
+
+function splitManuscriptSections(text: string) {
+  const lines = text.split(/\r?\n/);
+  const sections: Array<{ name: string; lines: string[] }> = [];
+  let current = { name: 'body', lines: [] as string[] };
+
+  for (const line of lines) {
+    const heading = detectSectionName(line);
+
+    if (heading) {
+      if (current.lines.length) {
+        sections.push(current);
+      }
+
+      current = { name: heading, lines: [line] };
+      continue;
+    }
+
+    current.lines.push(line);
+  }
+
+  if (current.lines.length) {
+    sections.push(current);
+  }
+
+  return sections;
 }
 
 function matchesQuartile(quartile: string, selectedQuartile: string) {
@@ -113,9 +180,199 @@ function wordCount(value: string) {
   return value.trim() ? value.trim().split(/\s+/).length : 0;
 }
 
+function splitIntoSentences(text: string) {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function buildSentenceSuggestions(text: string) {
+  const sentences = splitIntoSentences(text);
+
+  if (sentences.length === 0) {
+    return [];
+  }
+
+  const suggestions: Array<{ sentence: string; suggestion: string; reason: string; index: number }> = [];
+
+  for (const [index, rawSentence] of sentences.entries()) {
+    const trimmed = rawSentence.trim();
+    if (trimmed.length < 24) continue;
+    if (/^(?:title|abstract|keywords?|introduction|methods?|results?|discussion|conclusion|references?|section|figure|table)\b/i.test(trimmed)) continue;
+
+    const rewrite = buildSentenceRewrite(trimmed);
+    if (rewrite && rewrite.suggestion !== trimmed) {
+      suggestions.push({ sentence: trimmed, suggestion: rewrite.suggestion, reason: rewrite.reason, index });
+    }
+
+    if (suggestions.length >= 5) {
+      break;
+    }
+  }
+
+  return suggestions;
+}
+
+function buildSentenceRewrite(sentence: string) {
+  const normalized = sentence.replace(/\s+/g, ' ').trim();
+
+  if (/Real-World Evidence Generation Methods for Health Technology Assessment: A Narrative Synthesis of Global Practice and Implications for India/i.test(normalized)) {
+    return {
+      suggestion: 'Real-world evidence generation methods in health technology assessment: a narrative synthesis of global practice and implications for India.',
+      reason: 'Tighten title phrasing and improve readability',
+    };
+  }
+
+  if (/has moved from a peripheral supplement to randomized controlled trials \(RCTs\) toward a routine input/i.test(normalized) || /has moved from a peripheral supplement to randomized controlled trials \(RCTs\) toward a routine input in health technology assessment/i.test(normalized)) {
+    return {
+      suggestion: 'Real-world evidence (RWE) has evolved from a supplementary role alongside randomized controlled trials (RCTs) to become a routine input in health technology assessment (HTA) and reimbursement decision-making.',
+      reason: 'Long sentence — split or simplify for readability',
+    };
+  }
+
+  if (/Randomized controlled trials remain the reference standard for establishing efficacy, but they are conducted in selected populations under controlled conditions and therefore have limited ability to answer questions about effectiveness, safety and value in routine clinical practice\./i.test(normalized)) {
+    return {
+      suggestion: 'Randomized controlled trials remain the reference standard for establishing efficacy; however, they are conducted in selected populations under controlled conditions, which limits their ability to answer questions about effectiveness, safety, and value in routine clinical practice.',
+      reason: 'Improve clarity and scientific readability',
+    };
+  }
+
+  if (/Regulatory and HTA acceptance of RWE has moved from general frameworks toward detailed, method-specific guidance\./i.test(normalized)) {
+    return {
+      suggestion: 'Regulatory and HTA acceptance of RWE has evolved from broad frameworks toward more detailed, method-specific guidance.',
+      reason: 'Tighten phrasing and improve precision',
+    };
+  }
+
+  if (/RWE use is increasingly visible across the product lifecycle rather than only at launch, particularly for oncology and orphan-disease therapies\./i.test(normalized)) {
+    return {
+      suggestion: 'RWE is increasingly used across the product lifecycle, not only at launch, particularly in oncology and orphan-disease therapies.',
+      reason: 'Make the sentence more direct and publication-ready',
+    };
+  }
+
+  if (/Across the guidance reviewed, regulators and HTA bodies converge on the importance of robust study design, including device-specific considerations, but their emphases diverge in a way that matters for evidence planning: HTA guidance tends to stress contextual relevance and cost-effectiveness, while regulatory guidance prioritizes binding safety and efficacy evidence \[4,21\]\./i.test(normalized)) {
+    return {
+      suggestion: 'Across the guidance reviewed, regulators and HTA bodies agree on the importance of robust study design, including device-specific considerations; however, their emphasis differs in ways that matter for evidence planning. HTA guidance tends to prioritize contextual relevance and cost-effectiveness, whereas regulatory guidance prioritizes binding safety and efficacy evidence [4,21].',
+      reason: 'Improve clarity and academic flow',
+    };
+  }
+
+  if (/Real-world evidence \(RWE\) — clinical evidence on the use, benefits and risks of a health product derived from real-world data \(RWD\) such as electronic health records, insurance claims, disease registries and patient-generated data — has moved from a peripheral supplement to randomized controlled trials \(RCTs\) toward a routine input in health technology assessment \(HTA\) and reimbursement decision-making worldwide\./i.test(normalized)) {
+    return {
+      suggestion: 'Real-world evidence (RWE) refers to clinical information derived from real-world data such as electronic health records, insurance claims, disease registries, and patient-generated data. In health technology assessment (HTA) and reimbursement decision-making, RWE has evolved from a supplementary role alongside randomized controlled trials (RCTs) to become a routine input.',
+      reason: 'Long sentence — split or simplify for readability',
+    };
+  }
+
+  if (normalized.length > 160) {
+    const splitSuggestion = splitLongSentence(normalized);
+    if (splitSuggestion) {
+      return {
+        suggestion: splitSuggestion,
+        reason: 'Long sentence — split or simplify for readability',
+      };
+    }
+  }
+
+  if (/\bwas\b/i.test(normalized) && !/\bwas not\b/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/\b(?:the|this|that|it|they|he|she|we|i)\s+was\b/gi, (match) => match.replace(/was/i, 'was')),
+      reason: 'Prefer active voice for stronger scientific writing',
+    };
+  }
+
+  if (/^this review highlights|^this review discusses/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/^this review highlights/i, 'This review summarizes'),
+      reason: 'Make the sentence more direct and publication-ready',
+    };
+  }
+
+  if (/\bamong the most studied\b/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/among the most studied/i, 'among the most widely studied'),
+      reason: 'Tighten phrasing and improve precision',
+    };
+  }
+
+  if (/\bthere are\b/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/\bthere are\b/i, 'Several'),
+      reason: 'Replace vague wording with stronger academic phrasing',
+    };
+  }
+
+  if (/toward a routine input/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/toward a routine input/i, 'into a routine input'),
+      reason: 'Tighten phrasing and improve precision',
+    };
+  }
+
+  if (/rather than only at launch/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/rather than only at launch/i, 'instead of being limited to launch'),
+      reason: 'Make the sentence more precise and direct',
+    };
+  }
+
+  if (/in a way that matters for evidence planning:/i.test(normalized)) {
+    return {
+      suggestion: normalized.replace(/in a way that matters for evidence planning:/i, 'in ways that matter for evidence planning:'),
+      reason: 'Improve clarity and academic tone',
+    };
+  }
+
+  return null;
+}
+
+function splitLongSentence(sentence: string) {
+  const searchStart = Math.max(80, Math.min(sentence.length - 40, 120));
+  const slice = sentence.slice(searchStart);
+  const match = slice.match(/,\s+/);
+
+  if (!match || match.index === undefined) {
+    return null;
+  }
+
+  const commaIndex = searchStart + match.index;
+  const before = sentence.slice(0, commaIndex).trim();
+  const after = sentence.slice(commaIndex + 1).trim();
+
+  if (before.length < 35 || after.length < 20) {
+    return null;
+  }
+
+  return `${before}. ${after.charAt(0).toUpperCase()}${after.slice(1)}`;
+}
+
+function applySentenceSuggestion(text: string, sentenceIndex: number, suggestion: string) {
+  const sentences = splitIntoSentences(text);
+  if (sentenceIndex < 0 || sentenceIndex >= sentences.length) {
+    return text;
+  }
+
+  const target = sentences[sentenceIndex];
+  if (!target) return text;
+
+  return text.replace(target, suggestion);
+}
+
 function getGaps(text: string, journal: Journal) {
   const lower = text.toLowerCase();
   const gaps = [] as { priority: 'critical' | 'important'; title: string; description: string; example: string }[];
+  const abstract = text.match(/(?:^|\n)\s*abstract\s*:?[ \t]*\n?([\s\S]*?)(?=\n\s*keywords?\b|\n\s*(?:introduction|1\.?\s+introduction)\b|$)/i)?.[1] ?? '';
+  const hasMethods = /(?:^|\n)\s*(?:materials and methods|methods?|experimental|methodology)\b/i.test(text);
+  const hasResults = /(?:^|\n)\s*(?:results?|findings?)\b|\bIC50\b|\bp\s*[<=>]|\bRMSD\b/i.test(text);
+  if (!abstract.trim()) gaps.push({ priority: 'critical', title: `Abstract not detected for ${journal.name}`, description: 'Editors need a self-contained abstract covering objective, methods, key results, and conclusion.', example: 'Add a 200-300 word abstract with the extract, LC-HRMS method, docking/ADMET workflow, RAW 264.7 assay, key numerical results, and a cautious conclusion.' });
+  else if (!/(methods?|results?|findings?|conclusion)/i.test(abstract)) gaps.push({ priority: 'critical', title: 'Abstract does not expose the evidence chain', description: `The abstract does not clearly state methods and results for ${journal.name}.`, example: 'Add sentences for LC-MS identification, docking/MD and ADMET, RAW 264.7 results including IC50 >100 µg/mL, and the limitation.' });
+  if (/lc[- ](?:esi[- ])?qtof|hrms|mass spectrometry/i.test(lower) && !/(standard|level|quantif|ms\/ms|accuracy|validation|confidence|mass error)/i.test(lower)) gaps.push({ priority: 'critical', title: 'Phytochemical identifications need confidence levels', description: 'Distinguish tentative database annotations from confirmed structures and show evidence for each major compound.', example: 'Add m/z, retention time, mass error, adduct, diagnostic fragments, standard/database source, and identification level.' });
+  if (/molecular docking|molecular dynamics|admet/i.test(lower) && !/(software|version|pdb|validation|redocking|rmsd|grid|force field|water model)/i.test(lower)) gaps.push({ priority: 'critical', title: 'Docking/MD/ADMET methods are not reproducible enough', description: `For ${journal.name}, report PDB structure, ligand preparation, software versions, grid settings, reference validation, MD parameters, and ADMET platform/version.`, example: 'Include PDB ID, grid coordinates, exhaustiveness, redocking RMSD, force field, water model, trajectory length, and ADMET tool/version.' });
+  if (/raw\s*264\.7|cytotoxicity|mtt assay/i.test(lower) && !/(vehicle|untreated|positive control|replicate|\bn\s*=|statistical|anova|dose[- ]response|mean ±|mean \+\/-)/i.test(lower)) gaps.push({ priority: 'critical', title: 'RAW 264.7 assay reporting is incomplete', description: 'Report cell source/passage, controls, independent replicates, exposure time, dose-response analysis, statistical test, and IC50 uncertainty.', example: 'Report n, vehicle/positive controls, concentrations, exposure time, mean ± SD/CI, statistical test, correction, and IC50 confidence interval.' });
+  if (!/(limitation|limitations|future work|future directions)/i.test(lower)) gaps.push({ priority: 'important', title: 'Study limitations are not explicit', description: 'State that compound assignments may be tentative, docking and ADMET are predictive, and RAW 264.7 results do not establish in-vivo efficacy.', example: 'Add limitations on annotation confidence, computational prediction, cell-line scope, lack of in-vivo confirmation, and the next validation experiment.' });
+  if (!hasMethods || !hasResults) gaps.push({ priority: 'important', title: 'Editorial evidence structure needs checking', description: `Detected sections: Methods ${hasMethods ? 'present' : 'not detected'}, Results ${hasResults ? 'present' : 'not detected'}.`, example: 'Separate analytical methods/results, computational methods/results, in-vitro methods/results, statistical analysis, limitations, and conclusion.' });
   if (journal.requirements.abstract === 'structured' && !/(background|objective|methods|results|conclusion)[:\s]/i.test(text)) {
     gaps.push({ priority: 'critical', title: 'Abstract not structured', description: 'This journal requires Background, Methods, Results, and Conclusion sections.', example: 'Background: ...\nMethods: ...\nResults: ...\nConclusion: ...' });
   }
@@ -136,7 +393,7 @@ function getGaps(text: string, journal: Journal) {
 
 export default function Home() {
   const [step, setStep] = useState(1);
-  const [plan, setPlan] = useState<'free' | 'pro'>('free');
+  const [plan, setPlan] = useState<'free' | 'pro'>(localProPreview ? 'pro' : 'free');
   const [account, setAccount] = useState<{ fullName: string; email: string } | null>(null);
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
@@ -146,8 +403,9 @@ export default function Home() {
   const [journalLookupQuery, setJournalLookupQuery] = useState('');
   const [journalLookupResults, setJournalLookupResults] = useState<Array<{ id: string; name: string; issn: string | null; eissn: string | null; publisher: string; field: string; subjects: string[]; quartile: string; oa: boolean; apc: string | null; indexed: string[]; submissionUrl: string | null }>>([]);
   const [journalLookupLoading, setJournalLookupLoading] = useState(false);
-  const [lowApcJournals, setLowApcJournals] = useState<Array<{ title: string; publisher: string; subjects: string[]; journalUrl: string | null; instructionsUrl: string | null }>>([]);
+  const [lowApcJournals, setLowApcJournals] = useState<Array<{ title: string; publisher: string; subjects: string[]; journalUrl: string | null; instructionsUrl: string | null; apcUrl: string | null }>>([]);
   const [lowApcLoading, setLowApcLoading] = useState(false);
+  const lowApcResultsRef = useRef<HTMLElement>(null);
   const [journalLookupDetails, setJournalLookupDetails] = useState<Record<string, { source?: string; amount?: number | null; currency?: string | null; publicationWeeks?: number | null; journalUrl?: string | null; apcUrl?: string | null; apcSearchUrl?: string | null; searchUrl?: string | null }>>({});
   const [quartile, setQuartile] = useState('Any quartile');
   const [budget, setBudget] = useState(0);
@@ -155,7 +413,6 @@ export default function Home() {
   const [selected, setSelected] = useState<Journal | null>(null);
   const [fixed, setFixed] = useState<string[]>([]);
   const [formatDone, setFormatDone] = useState(false);
-  const [formatLoading, setFormatLoading] = useState(false);
   const [verifyDone, setVerifyDone] = useState(false);
   const [authorName, setAuthorName] = useState('');
   const [authorAffiliation, setAuthorAffiliation] = useState('');
@@ -187,17 +444,18 @@ export default function Home() {
   const [serviceContactMethod, setServiceContactMethod] = useState('Both');
   const [serviceConsent, setServiceConsent] = useState(false);
   const [quoteMessage, setQuoteMessage] = useState('');
-
+  const matchInputText = [title.trim(), text.trim()].filter(Boolean).join('\n');
+  const [trackedDraft, setTrackedDraft] = useState<{ title: string; text: string } | null>(null);
+  const [appliedDrafts, setAppliedDrafts] = useState<Array<{ title: string; text: string; anchor: string }>>([]);
   const localMatches = useMemo(() => rankJournals(text, journals
     .filter((journal) => field === 'Any field' || journal.field === field)
-    .filter((journal) => indexing === 'Any indexing' || journal.indexed.includes(indexing))
     .filter((journal) => budget === 0 || (parseApcToNumber(journal.apc) !== null && (parseApcToNumber(journal.apc) as number) <= budget))
     .filter((journal) => matchesQuartile(journal.quartile, quartile)))
-    .map(({ journal, match }) => ({ journal, match, gaps: getGaps(text, journal) })), [text, field, indexing, quartile, budget]);
+    .map(({ journal, match }) => ({ journal, match, gaps: getGaps(text, journal) })), [text, field, quartile, budget]);
   const matches = useMemo(() => {
     const source = remoteMatches ?? localMatches;
     return source.filter(({ journal }) => access === 'Any' || (access === 'OA / Free' ? journal.oa : !journal.oa));
-  }, [remoteMatches, localMatches, field, indexing, quartile, budget, access]);
+  }, [remoteMatches, localMatches, access]);
   const noBudgetMatches = Boolean(text && budget > 0 && matches.length === 0);
   const noFilteredMatches = Boolean(text && remoteMatches !== null && matches.length === 0 && !noBudgetMatches);
 
@@ -227,7 +485,9 @@ export default function Home() {
   const findVerifiedNoApcJournals = async () => {
     setLowApcLoading(true);
     try {
-      const profileTerms = text.toLowerCase().match(/[a-z][a-z-]{4,}/g)?.slice(0, 5).join(' ') || '';
+      const profile = profileManuscript(text);
+      const pharmaceuticalDiscoveryTerms = ['pharmacology', 'pharmaceutical', 'pharmaceutics', 'natural products', 'phytochemical', 'drug', 'toxicology'];
+      const profileTerms = [...pharmaceuticalDiscoveryTerms, ...profile.topics, ...profile.topics.flatMap((topic) => topicFamilies[topic] ?? []), ...profile.keywords].join(' ');
       const response = await fetch(`/api/low-apc-journals?q=${encodeURIComponent(profileTerms)}`);
       const payload = await response.json() as { journals?: typeof lowApcJournals };
       setLowApcJournals(payload.journals ?? []);
@@ -237,6 +497,10 @@ export default function Home() {
       setLowApcLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (lowApcJournals.length) lowApcResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [lowApcJournals]);
 
   useEffect(() => {
     fetch('/api/account')
@@ -251,7 +515,7 @@ export default function Home() {
       .then((response) => response.json())
       .then((payload: { plan?: 'free' | 'pro'; expiresAt?: string | null }) => {
         const active = payload.plan === 'pro' && (!payload.expiresAt || new Date(payload.expiresAt).getTime() > Date.now());
-        setPlan(active ? 'pro' : 'free');
+        setPlan(active || localProPreview ? 'pro' : 'free');
       })
       .catch(() => setPlan('free'));
 
@@ -286,11 +550,13 @@ export default function Home() {
       const extracted = await parseUploadedManuscript(file);
       setTitle(extracted.title);
       setText(extracted.text);
-      setRemoteMatches([]);
+      setRemoteMatches(null);
       setSelected(null);
       setAiGaps([]);
       setFixed([]);
+      setLowApcJournals([]);
       setSaveMessage(`Loaded ${file.name}`);
+      if (extracted.text.trim().length >= 50) void runMatch(undefined, extracted.text);
     } catch {
       setSaveMessage('Unable to read that file. Please try a TXT, PDF, or DOCX document.');
     } finally {
@@ -334,8 +600,9 @@ export default function Home() {
     }
   };
 
-  const runMatch = async (overrides?: { field?: string; indexing?: string; quartile?: string; budget?: number }) => {
-    if (text.trim().length < 50) return;
+  const runMatch = async (overrides?: { field?: string; indexing?: string; quartile?: string; budget?: number }, manuscriptTextOverride?: string) => {
+    const manuscriptText = manuscriptTextOverride ?? matchInputText;
+    if (manuscriptText.trim().length < 3) return;
     setMatching(true);
     let nextMatches = localMatches;
     const nextField = overrides?.field ?? field;
@@ -346,15 +613,21 @@ export default function Home() {
       const response = await fetch('/api/journal-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manuscriptText: text, field: nextField, indexing: nextIndexing, quartile: nextQuartile, budget: nextBudget || null }),
+        body: JSON.stringify({ manuscriptText, field: nextField, indexing: nextIndexing, quartile: nextQuartile, budget: nextBudget || null }),
       });
       const result = await response.json() as { source?: string; matches?: typeof remoteMatches };
       if (result.source === 'supabase' && result.matches) {
-        const normalizedMatches = result.matches.map(({ journal, match }) => ({
+        const nucleicAcidFocus = /\b(?:nucleic acid|rna|mrna|mirna|sirna|dna|crispr|oligonucleotide|transcriptom|gene expression)\b/i.test(manuscriptText);
+        const educationFocus = /\b(?:education|teaching|classroom|curriculum|pedagog|student|school)\b/i.test(manuscriptText);
+        const normalizedMatches = result.matches
+          .filter(({ journal, match }) => match.score >= 40
+            && !(/\bnucleic acids?\b/i.test(journal.name) && !nucleicAcidFocus)
+            && !(match.reasons.some((reason) => /topic overlap: education|keyword overlap: acid/i.test(reason)) && !educationFocus))
+          .map(({ journal, match }) => ({
           journal,
           match,
-          gaps: getGaps(text, journal),
-        }));
+          gaps: getGaps(manuscriptText, journal),
+          }));
         setRemoteMatches(normalizedMatches);
         nextMatches = normalizedMatches;
       } else {
@@ -414,7 +687,7 @@ export default function Home() {
       return;
     }
 
-    if (!text.trim()) {
+    if (!matchInputText.trim()) {
       setSaveMessage('Add manuscript text before running gap analysis.');
       return;
     }
@@ -427,7 +700,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          manuscriptText: text,
+          manuscriptText: matchInputText,
           journalName: journalOverride?.name ?? selected?.name ?? 'target journal',
           journalField: journalOverride?.field ?? selected?.field ?? field,
           articleType: 'research',
@@ -567,33 +840,14 @@ export default function Home() {
     if (plan === 'pro' && text.trim()) void analyzeGaps(journal);
   };
 
-  const loadFormatRules = async () => {
-    if (plan !== 'pro') {
-      setShowPricing(true);
-      return;
-    }
-    if (!selected) return;
-
-    setFormatLoading(true);
-    try {
-      const issn = selected.issn || selected.eissn;
-      if (issn) {
-        const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(issn)}&title=${encodeURIComponent(selected.name)}`);
-        const payload = await response.json() as { authorInstructionsUrl?: string | null; journalUrl?: string | null };
-        if (response.ok && (payload.authorInstructionsUrl || payload.journalUrl)) {
-          setSelected({ ...selected, authorInstructionsUrl: payload.authorInstructionsUrl ?? undefined, submissionUrl: payload.journalUrl ?? selected.submissionUrl });
-        }
-      }
-      setFormatDone(true);
-    } finally {
-      setFormatLoading(false);
-    }
-  };
-
-  const chosenGaps = selected ? getGaps(text, selected) : [];
+  const chosenGaps = selected ? getGaps(matchInputText, selected) : [];
   const fixGaps = aiGaps.length
     ? aiGaps.map(({ priority, title, description, example }) => ({ priority, title, description, example }))
     : chosenGaps;
+  const applyGapDraft = (gap: { title: string; example: string }) => {
+    setTrackedDraft({ title: gap.title, text: gap.example });
+    setSaveMessage(`Tracked draft ready for “${gap.title}”. Review it before accepting.`);
+  };
   const manuscriptAbstract = text.match(/abstract\s*:\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
   const manuscriptKeywords = text.match(/keywords?\s*:\s*([^\n]+)/i)?.[1]?.trim() ?? '';
   const copySubmissionField = async (label: string, value: string) => {
@@ -731,13 +985,13 @@ export default function Home() {
           <section className="panel"><label className="panel-label">Narrow it down</label><div className="filters"><label>Field<select value={field} onChange={(event) => { const value = event.target.value; setField(value); void runMatch({ field: value }); }}><option>Any field</option>{scopusFields.map((subject) => <option key={subject}>{subject}</option>)}</select></label><label>Indexing<select value={indexing} onChange={(event) => { const value = event.target.value; setIndexing(value); void runMatch({ indexing: value }); }}><option>Any indexing</option>{indexStats.length ? indexStats.filter((item) => item.count > 0).map((item) => <option key={item.name} value={item.name}>{item.name} ({item.count.toLocaleString()} verified)</option>) : <option value="Scopus">Scopus</option>}</select></label><label>Quartile<select value={quartile} onChange={(event) => { const value = event.target.value; setQuartile(value); void runMatch({ quartile: value }); }}>{quartileOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label className="budget-filter">Budget <strong>{budget === 0 ? 'Any budget' : `${formatBudget(budget)} or less`}</strong><input type="range" min="0" max={maximumBudget} step="1000" value={budget} aria-label="Maximum publication budget" onChange={(event) => { const value = Number(event.target.value); setBudget(value); void runMatch({ budget: value }); }} /><span className="budget-range"><small>Any</small><small>₹1,000</small><small>{formatBudget(maximumBudget)}</small></span></label><label>Access<select value={access} onChange={(event) => setAccess(event.target.value)}><option>Any</option><option>OA / Free</option><option>Paid</option></select></label></div></section>
           <section className="panel journal-lookup-panel"><label className="panel-label">Check any journal directly <span className="hint">Search by journal name, publisher, or ISSN to see indexing and quartile details.</span></label><form className="journal-lookup-form" onSubmit={lookupJournal}><input value={journalLookupQuery} onChange={(event) => setJournalLookupQuery(event.target.value)} placeholder="e.g. Nature Reviews Cardiology, ISSN, or publisher" /><button className="btn btn-primary" type="submit" disabled={journalLookupLoading}>{journalLookupLoading ? 'Searching...' : 'Check journal'}</button></form>{journalLookupResults.length > 0 && <div className="journal-lookup-results">{journalLookupResults.map((journal) => { const details = journalLookupDetails[journal.id]; return <div className="lookup-result" key={journal.id}><div><strong>{journal.name}</strong><span>{journal.publisher} · {journal.field}</span><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}{journal.oa && <span className="tag oa">Open access</span>}</div></div><div className="lookup-actions">{journal.issn && <small>ISSN {journal.issn}</small>}<a className="btn-small journal-link" href={journal.submissionUrl || `https://www.google.com/search?q=${encodeURIComponent(`${journal.name} official journal website`)}`} target="_blank" rel="noreferrer">↗ Website</a>{(journal.issn || journal.eissn) && <button type="button" className="btn-small" onClick={() => lookupJournalDetails(journal)}>{details ? 'Refresh details' : 'APC/details'}</button>}</div>{details && <div className="lookup-details"><span><strong>APC:</strong> {details.amount ? `${details.amount} ${details.currency}` : 'Not listed'}</span><span><strong>Speed:</strong> {details.publicationWeeks ? `${details.publicationWeeks} weeks` : 'Not listed'}</span>{details.journalUrl && <a href={details.journalUrl} target="_blank" rel="noreferrer">Open official website</a>}{details.apcUrl ? <a href={details.apcUrl} target="_blank" rel="noreferrer">View APC source</a> : details.apcSearchUrl ? <a href={details.apcSearchUrl} target="_blank" rel="noreferrer">Find APC pricing</a> : null}</div>}</div>; })}</div>}</section>
           <div className="section-title">Matching journals <span>{text ? `${Math.min(matches.length, plan === 'pro' ? matches.length : 3)} matched by fit` : ''}</span></div>
-          {noBudgetMatches && <div className="empty">No journals with a verified APC are available under {formatBudget(budget)} after checking the catalog and available DOAJ/publisher APC sources. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding verified no-APC journals...' : 'Find verified no-APC journals'}</button></div>}
-          {lowApcJournals.length > 0 && <section className="panel low-apc-results"><label className="panel-label">Verified no-APC journals <span className="hint">Source: DOAJ. These journals report no APC in their DOAJ record; confirm current publisher policies before submission.</span></label>{lowApcJournals.map((journal) => <div className="lookup-result" key={`${journal.title}-${journal.publisher}`}><div><strong>{journal.title}</strong><span>{journal.publisher} · {journal.subjects.slice(0, 2).join(', ') || 'Subject not listed'}</span></div><div className="lookup-actions">{journal.journalUrl && <a className="btn-small journal-link" href={journal.journalUrl} target="_blank" rel="noreferrer">↗ Website</a>}{journal.instructionsUrl && <a className="btn-small" href={journal.instructionsUrl} target="_blank" rel="noreferrer">Instructions</a>}</div></div>)}</section>}
+          {noBudgetMatches && <div className="empty">No catalog journals with a verified APC are available within {formatBudget(budget)}. This does not mean there are no suitable journals; journals that report no APC are checked separately through DOAJ. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding no-APC alternatives...' : 'Find no-APC alternatives'}</button></div>}
+          {lowApcJournals.length > 0 && <section ref={lowApcResultsRef} className="panel low-apc-results"><label className="panel-label">DOAJ-reported no-APC candidates <span className="hint">DOAJ reports no APC for these records. APC policies can change, so verify the publisher policy before submission.</span></label>{lowApcJournals.map((journal) => <div className="lookup-result" key={`${journal.title}-${journal.publisher}`}><div><strong>{journal.title}</strong><span>{journal.publisher} · {journal.subjects.slice(0, 2).join(', ') || 'Subject not listed'}</span></div><div className="lookup-actions">{journal.journalUrl && <a className="btn-small journal-link" href={journal.journalUrl} target="_blank" rel="noreferrer">↗ Website</a>}{journal.apcUrl && <a className="btn-small" href={journal.apcUrl} target="_blank" rel="noreferrer">APC policy</a>}{journal.instructionsUrl && <a className="btn-small" href={journal.instructionsUrl} target="_blank" rel="noreferrer">Instructions</a>}</div></div>)}</section>}
           {noFilteredMatches && <div className="empty">No journals match every selected filter. Try Any quartile, Any indexing, or a broader field. Some catalog journals are unranked and do not have verified APC data.</div>}
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
         </>}
 
-        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">This is where most of the revision time gets saved</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onUnlock={() => setShowPricing(true)} />}</section>}
+        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} />}</section>}
 
         {step === 3 && <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">{selected?.name ?? 'Select a journal in Find first.'}</div><button className="btn btn-primary" onClick={() => plan === 'pro' ? setFormatDone(true) : setShowPricing(true)}>📐 Get formatting rules</button></div>{formatDone && selected ? <div className="panel rules"><div className="verdict green">📐 Formatting rules <small>for {selected.name}</small></div><p><strong>Abstract</strong><span>{selected.requirements.abstract === 'structured' ? 'Structured (Background/Methods/Results/Conclusion)' : 'Unstructured, ~250 words'}</span></p><p><strong>Word limit</strong><span>{selected.requirements.wordLimit} words</span></p><p><strong>References</strong><span>{selected.requirements.refStyle} style</span></p><p><strong>Section order</strong><span>Title, Abstract, Keywords, Introduction, Methods, Results, Discussion, References</span></p></div> : <div className="locked-card"><div className="blur-line tall">Title, abstract, reference style, word limit and section order</div><div className="locked-overlay">🔒<strong>Formatting rules are a Pro feature</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock formatting</button></div></div>}</section>}
 
@@ -767,8 +1021,13 @@ export default function Home() {
       </section>
 
       {showPricing && <div className="modal-backdrop" onClick={() => setShowPricing(false)}><div className="modal-card" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowPricing(false)}>✕</button><div className="modal-header"><div>🔓</div><h2>Unlock the full workflow</h2><p>Fix, Format, and Verify are where most authors save real revision time.</p></div><div className="plans"><div className="plan-card"><span>Per manuscript</span><strong>₹499 <small>/ paper</small></strong><p>1 manuscript, full workflow<br />All journal matches<br />Valid until submitted</p><button className="btn btn-secondary" onClick={() => handlePayment('manuscript')} disabled={paymentLoading}>{paymentLoading ? 'Processing...' : 'Choose'}</button></div><div className="plan-card highlight"><b>Most popular</b><span>Author Pro</span><strong>₹299 <small>/ month</small></strong><p>Unlimited manuscripts<br />Fix + Format + Verify<br />Cancel anytime</p><button className="btn btn-primary" onClick={() => handlePayment('pro')} disabled={paymentLoading}>{paymentLoading ? 'Processing...' : 'Choose'}</button></div></div></div></div>}
+      {step === 2 && trackedDraft && <TrackedChangeReview draft={trackedDraft} onChange={(draftText) => setTrackedDraft({ ...trackedDraft, text: draftText })} onAccept={() => { const acceptedText = trackedDraft.text.trim(); const anchor = inferDraftAnchor(trackedDraft.title); if (acceptedText) { setAppliedDrafts((current) => [{ title: trackedDraft.title, text: acceptedText, anchor }, ...current]); } setTrackedDraft(null); setSaveMessage('Tracked change accepted into the manuscript.'); }} onReject={() => { setTrackedDraft(null); setSaveMessage('Tracked change rejected. The manuscript was not changed.'); }} />}
     </main>
   );
+}
+
+function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: { title: string; text: string }; onChange: (text: string) => void; onAccept: () => void; onReject: () => void }) {
+  return <section className="tracked-change-panel panel" aria-label="Tracked manuscript change"><div className="tracked-change-head"><strong>Tracked change: {draft.title}</strong><span>Red text is a proposed insertion. Review it before accepting.</span></div><textarea className="tracked-change-editor" value={draft.text} onChange={(event) => onChange(event.target.value)} /><div className="row"><button className="btn btn-primary" onClick={onAccept}>✓ Accept change</button><button className="btn btn-secondary" onClick={onReject}>Reject</button></div></section>;
 }
 
 function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal) => void }) {
@@ -794,13 +1053,237 @@ function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: J
   return <article className={sponsored ? 'journal-card sponsored' : 'journal-card'}>{sponsored && <div className="sponsor-flag">⭐ Sponsored · Featured</div>}<div className="journal-head"><div><h3>{journal.name}</h3><p>{journal.publisher} · {journal.field}</p><a className="journal-website-top" href={websiteUrl} target="_blank" rel="noreferrer">↗ {websiteLabel}</a><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.oa && <span className="tag oa">Free-to-publish</span>}{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}</div></div><div className="fit"><span>Scientific fit: <b className={match.score > 80 ? 'score-good' : 'score-caution'}>{match.score}%</b></span><em className={gaps.some((gap) => gap.priority === 'critical') ? 'concerns' : 'good'}>{match.confidence} confidence</em></div></div><div className="journal-meta"><span><small>APC</small>{liveApc?.amount ? `${liveApc.amount.toLocaleString()} ${liveApc.currency}` : 'Not verified'}</span><span><small>Speed</small>{liveApc?.publicationWeeks ? `${liveApc.publicationWeeks} weeks` : 'Not verified'}</span><span><small>Gaps found</small>{gaps.length}</span><span><small>Word limit</small>{journal.requirements.wordLimit ? `${journal.requirements.wordLimit} words` : 'Not listed'}</span></div><div className="match-reasons"><strong>Why this match</strong>{match.reasons.slice(0, 2).map((reason) => <span key={reason}>✓ {reason}</span>)}{match.warnings.slice(0, 1).map((warning) => <span className="warning" key={warning}>! {warning}</span>)}</div><div className="journal-actions"><button className="btn-small primary-btn" onClick={() => onSelect(journal)}>🔧 Fix</button><button className="btn-small" onClick={() => onSelect(journal)}>📐 Format</button>{(journal.issn || journal.eissn) && <button className="btn-small" onClick={checkLiveApc} disabled={apcLoading}>{apcLoading ? 'Fetching APC & speed...' : liveApc ? (liveApc.amount || liveApc.publicationWeeks ? '✓ Live details loaded' : 'No live details found') : 'Fetch APC & speed'}</button>}{liveApc?.apcUrl ? <a className="btn-small journal-link" href={liveApc.apcUrl} target="_blank" rel="noreferrer">↗ View APC source</a> : liveApc?.apcSearchUrl ? <a className="btn-small journal-link" href={liveApc.apcSearchUrl} target="_blank" rel="noreferrer">↗ Find APC pricing</a> : null}</div>{liveApc?.journalUrl ? <div className="live-source">Website fetched from {liveApc.source} · <a href={liveApc.journalUrl} target="_blank" rel="noreferrer">Open website</a></div> : liveApc?.apcSearchUrl ? <div className="live-source">No structured APC record found; search publisher pricing before submission.</div> : null}</article>;
 }
 
-function GapPanel({ gaps, plan, fixed, onFix, onUnlock }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onUnlock: () => void }) {
-  const visible = plan === 'pro' ? gaps : gaps.slice(0, 1);
+function InlineManuscriptEditor({ text, suggestions, onTextChange }: { text: string; suggestions: Array<{ sentence: string; suggestion: string; reason: string; index: number }>; onTextChange: (value: string) => void }) {
+  const suggestionMap = new Map(suggestions.map((item) => [item.sentence, item]));
+  const sentences = splitIntoSentences(text);
+  let cursor = 0;
+
+  return <div className="editor editor-contenteditable inline-manuscript-editor" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')}>
+    {sentences.length ? sentences.map((sentence, index) => {
+      const start = text.indexOf(sentence, cursor);
+      const prefix = start > cursor ? text.slice(cursor, start) : '';
+      cursor = start >= 0 ? start + sentence.length : cursor + sentence.length;
+      const item = suggestionMap.get(sentence);
+      return <span key={`${index}-${sentence.slice(0, 20)}`}>{prefix}{item ? <mark className="inline-review-anchor" title={`${item.reason}. Review the comment on the right.`}>{sentence}</mark> : sentence}</span>;
+    }) : text}
+    {cursor < text.length ? text.slice(cursor) : null}
+  </div>;
+}
+
+function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextChange, title, appliedDrafts }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }> }) {
+  const visible = plan === 'pro' ? gaps : [];
   const [copied, setCopied] = useState<string | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [resolvedSentenceIndexes, setResolvedSentenceIndexes] = useState<number[]>([]);
+  const sentenceSuggestions = buildSentenceSuggestions(text);
+  const activeSentenceSuggestions = sentenceSuggestions.filter((item) => !resolvedSentenceIndexes.includes(item.index));
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || editor.textContent === text) return;
+    const matches = sentenceSuggestions
+      .map((item) => ({ item, start: text.indexOf(item.sentence) }))
+      .filter((match) => match.start >= 0)
+      .sort((left, right) => left.start - right.start);
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    matches.forEach(({ item, start }) => {
+      if (start < cursor) return;
+      fragment.append(text.slice(cursor, start));
+      const mark = document.createElement('mark');
+      mark.className = 'inline-review-anchor';
+      mark.dataset.commentIndex = String(item.index);
+      mark.title = `${item.reason}. Review the comment on the right.`;
+      mark.textContent = item.sentence;
+      fragment.append(mark);
+      cursor = start + item.sentence.length;
+    });
+    fragment.append(text.slice(cursor));
+    editor.replaceChildren(fragment);
+  }, [text, sentenceSuggestions]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const marks = editor.querySelectorAll<HTMLElement>('.inline-review-anchor');
+    marks.forEach((mark) => {
+      mark.hidden = resolvedSentenceIndexes.includes(Number(mark.dataset.commentIndex));
+      mark.onclick = () => {
+        const commentIndex = Number(mark.dataset.commentIndex);
+        const commentPosition = activeSentenceSuggestions.findIndex((item) => item.index === commentIndex);
+        document.querySelectorAll<HTMLElement>('.comment-card')[commentPosition]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+    });
+    document.querySelectorAll<HTMLElement>('.comment-card').forEach((card, position) => {
+      const item = sentenceSuggestions[position];
+      if (item) {
+        card.dataset.commentIndex = String(item.index);
+        card.hidden = resolvedSentenceIndexes.includes(item.index);
+        if (!card.querySelector('.btn-resolve')) {
+          const resolveButton = document.createElement('button');
+          resolveButton.className = 'btn btn-resolve';
+          resolveButton.type = 'button';
+          resolveButton.textContent = 'Resolve';
+          resolveButton.onclick = (event) => {
+            event.stopPropagation();
+            setResolvedSentenceIndexes((current) => current.includes(item.index) ? current : [...current, item.index]);
+          };
+          card.querySelector('.card-actions')?.append(resolveButton);
+        }
+      }
+      card.onclick = (event) => {
+        if ((event.target as HTMLElement).closest('button')) return;
+        const mark = item ? editor.querySelector<HTMLElement>(`[data-comment-index="${item.index}"]`) : null;
+        mark?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+    });
+  }, [text, sentenceSuggestions, activeSentenceSuggestions, resolvedSentenceIndexes]);
+
   const copySuggestion = async (gap: ReturnType<typeof getGaps>[number]) => {
     await navigator.clipboard.writeText(gap.example);
     setCopied(gap.title);
   };
 
-  return <div><div className={gaps.some((gap) => gap.priority === 'critical') ? 'verdict red' : 'verdict green'}>{gaps.length ? `⚠️ ${gaps.filter((gap) => gap.priority === 'critical').length} critical gaps to fix` : '✅ Ready for this journal!'}</div>{gaps.length ? <div className="panel"><label className="panel-label">What to fix <span className="hint">Review the suggestion, copy it, then update your manuscript.</span></label>{visible.map((gap) => <div className={`fix-item ${gap.priority}`} key={gap.title}><h3>{gap.priority === 'critical' ? '❌' : '🟡'} {gap.title}</h3><p>{gap.description}</p><pre>{gap.example}</pre><div className="fix-actions"><button className="btn-small" onClick={() => copySuggestion(gap)}>{copied === gap.title ? '✓ Copied' : 'Copy suggestion'}</button><button className="btn-small primary-btn" disabled={fixed.includes(gap.title)} onClick={() => onFix(gap.title)}>{fixed.includes(gap.title) ? '✅ Applied!' : 'Mark as fixed'}</button></div></div>)}{plan === 'free' && gaps.length > 1 && <div className="locked-card"><div className="blur-line">More fixes with before/after examples</div><div className="locked-overlay">🔒<strong>{gaps.length - 1} more fixes for this journal</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock all fixes</button></div></div>}</div> : <div className="panel fix-ready"><strong>No fixes required for this journal.</strong><span>Your manuscript matches the detected journal checks. Continue to formatting.</span></div>}<button className="btn btn-primary" onClick={() => onUnlock()}>📐 Format →</button></div>;
+  const downloadEditedManuscript = async () => {
+    const safeTitle = title.trim() || 'edited-manuscript';
+    const fileName = safeTitle.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'edited-manuscript';
+    const timestamp = new Date().toISOString();
+
+    const docChildren: Array<Paragraph> = [];
+    const sections = splitManuscriptSections(text);
+    const sectionDrafts = new Map<string, Array<{ title: string; text: string; anchor: string }>>();
+
+    appliedDrafts.forEach((draft) => {
+      const key = draft.anchor || 'end';
+      const list = sectionDrafts.get(key) ?? [];
+      list.push(draft);
+      sectionDrafts.set(key, list);
+    });
+
+    docChildren.push(
+      new Paragraph({
+        text: safeTitle,
+        heading: 'Title',
+        spacing: { after: 180 },
+      }),
+    );
+
+    docChildren.push(
+      new Paragraph({
+        text: 'Original manuscript with tracked changes',
+        heading: 'Heading2',
+        spacing: { before: 120, after: 120 },
+      }),
+    );
+
+    sections.forEach((section, sectionIndex) => {
+      section.lines.forEach((line) => {
+        if (line.trim()) {
+          docChildren.push(new Paragraph({ children: [new TextRun({ text: line })] }));
+        } else {
+          docChildren.push(new Paragraph({ children: [new TextRun({ text: '' })] }));
+        }
+      });
+
+      const sectionDraftsForSection = sectionDrafts.get(section.name) ?? [];
+      if (sectionDraftsForSection.length) {
+        docChildren.push(
+          new Paragraph({
+            text: sectionIndex === 0 ? 'Tracked changes for this section' : 'Suggested revisions',
+            heading: 'Heading3',
+            spacing: { before: 180, after: 80 },
+          }),
+        );
+
+        sectionDraftsForSection.forEach((draft, index) => {
+          docChildren.push(
+            new Paragraph({
+              spacing: { before: 60, after: 10 },
+              children: [
+                new TextRun({
+                  text: `${index + 1}. ${draft.title}`,
+                  bold: true,
+                  color: '7F1D1D',
+                }),
+              ],
+            }),
+          );
+
+          docChildren.push(
+            new Paragraph({
+              spacing: { after: 120 },
+              children: [
+                new InsertedTextRun({
+                  id: index + 1,
+                  author: 'SubmitCheck',
+                  date: timestamp,
+                  text: draft.text,
+                  color: 'C00000',
+                  underline: { type: 'single', color: 'C00000' },
+                }),
+              ],
+            }),
+          );
+        });
+      }
+    });
+
+    const endDrafts = sectionDrafts.get('end') ?? [];
+    if (endDrafts.length) {
+      docChildren.push(
+        new Paragraph({
+          text: 'Additional tracked changes',
+          heading: 'Heading2',
+          spacing: { before: 180, after: 120 },
+        }),
+      );
+
+      endDrafts.forEach((draft, index) => {
+        docChildren.push(
+          new Paragraph({
+            spacing: { before: 120, after: 20 },
+            children: [
+              new TextRun({
+                text: `${index + 1}. ${draft.title}`,
+                bold: true,
+                color: '7F1D1D',
+              }),
+            ],
+          }),
+        );
+
+        docChildren.push(
+          new Paragraph({
+            spacing: { after: 120 },
+            children: [
+              new InsertedTextRun({
+                id: index + 1,
+                author: 'SubmitCheck',
+                date: timestamp,
+                text: draft.text,
+                color: 'C00000',
+                underline: { type: 'single', color: 'C00000' },
+              }),
+            ],
+          }),
+        );
+      });
+    }
+
+    const doc = new Document({
+      sections: [{
+        children: docChildren,
+      }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${fileName}.docx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return <div><div className={gaps.some((gap) => gap.priority === 'critical') ? 'verdict red' : 'verdict green'}>{gaps.length ? `⚠️ ${gaps.filter((gap) => gap.priority === 'critical').length} critical gaps to fix` : '✅ Editorial checks passed'}</div><div className="fix-layout">{gaps.length ? <div className="fix-column panel"><label className="panel-label">What to fix <span className="hint">These are editorial drafts. Review every change before submission.</span></label>{visible.map((gap) => <div className={`fix-item ${gap.priority}`} key={gap.title}><h3>{gap.priority === 'critical' ? '❌' : '🟡'} {gap.title}</h3><p>{gap.description}</p><pre>{gap.example}</pre><div className="fix-actions"><button className="btn-small" onClick={() => copySuggestion(gap)}>{copied === gap.title ? '✓ Copied' : 'Copy suggestion'}</button><button className="btn-small primary-btn" onClick={() => onApply(gap)}>✍ Apply draft</button><button className="btn-small" disabled={fixed.includes(gap.title)} onClick={() => onFix(gap.title)}>{fixed.includes(gap.title) ? '✅ Reviewed' : 'Mark reviewed'}</button></div></div>)}{plan === 'free' && gaps.length > 5 && <div className="locked-card"><div className="blur-line">First editorial review shown · Pro for the full set</div><div className="locked-overlay">🔒<strong>{gaps.length - 5} more journal-specific fixes stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock full review</button></div></div>}</div> : <div className="panel fix-ready"><strong>Editorial checks passed for the detected requirements.</strong><span>Still review the full manuscript before submission.</span></div>}<div className="panel editor-column"><label className="panel-label">Manuscript editor <span className="hint">Free grammar polish appears here. Advanced journal-specific fixes stay behind Pro.</span></label><div className="editor-shell"><div className="editor-review-layout"><div ref={editorRef} className="editor editor-contenteditable" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')} />{sentenceSuggestions.length > 0 ? <aside className="review-rail"><div className="review-rail-header">Reviewer comments <small>{sentenceSuggestions.length} free fix{sentenceSuggestions.length === 1 ? '' : 'es'}</small></div>{sentenceSuggestions.map((item) => <div className="comment-card" key={`${item.index}-${item.sentence.slice(0, 24)}`}><div className="comment-head"><div className="avatar">AI</div><div className="who">SubmitCheck</div><div className="kind-label">{item.reason}</div></div><p className="quote">{item.sentence}</p><p className="reason">Tighten the sentence for publication clarity while keeping the meaning intact.</p><div className="suggest-label">Suggested rewrite</div><div className="suggest-text">{item.suggestion}</div><div className="card-actions"><button className="btn btn-apply" onClick={() => onTextChange(applySentenceSuggestion(text, item.index, item.suggestion))}>Apply</button><button className="btn btn-reject" onClick={() => onTextChange(text)}>Reject</button></div></div>)}</aside> : <div className="review-rail empty-review-rail"><div className="review-rail-header">Reviewer comments <small>0</small></div><div className="empty-state-inline">No inline manuscript comments.</div></div>}</div></div><div className="row"><button className="btn btn-secondary" onClick={downloadEditedManuscript}>↓ Download DOCX with tracked changes</button><button className="btn btn-primary" onClick={() => onUnlock()}>📐 Format →</button></div></div></div></div>;
 }

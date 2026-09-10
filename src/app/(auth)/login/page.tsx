@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -34,7 +35,7 @@ export default function LoginPage() {
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <a href="/" className="auth-back">← Back to SubmitCheck</a>
+        <Link href="/" className="auth-back">← Back to SubmitCheck</Link>
         <div className="auth-mark">✓</div>
         <p className="auth-kicker">Author workspace</p>
         <h1>Welcome back</h1>

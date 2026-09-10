@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
-  timeout: 15000,
+  timeout: 45000,
 });
 
 export type GapPriority = 'critical' | 'important';

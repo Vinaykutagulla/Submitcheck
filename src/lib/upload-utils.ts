@@ -7,7 +7,14 @@ export type ExtractedManuscript = {
 };
 
 function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').replace(/\u00A0/g, ' ').trim();
+  return value
+    .replace(/\u00A0/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .filter((line, index, lines) => line || lines[index - 1])
+    .join('\n')
+    .trim();
 }
 
 export function extractTextFromPlainText(raw: string): string {
@@ -21,11 +28,15 @@ export async function extractTextFromDocx(file: File): Promise<string> {
 }
 
 export async function extractTextFromPdf(file: File): Promise<string> {
-  const pdfModule = await import('pdf-parse');
-  const pdfParse = (pdfModule as any).default ?? pdfModule;
+  const { PDFParse } = await import('pdf-parse');
   const arrayBuffer = await file.arrayBuffer();
-  const result = await pdfParse(Buffer.from(arrayBuffer));
-  return normalizeWhitespace(result.text || '');
+  const parser = new PDFParse({ data: arrayBuffer });
+  try {
+    const result = await parser.getText();
+    return normalizeWhitespace(result.text || '');
+  } finally {
+    await parser.destroy();
+  }
 }
 
 export async function parseUploadedManuscript(file: File): Promise<ExtractedManuscript> {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { profileManuscript, rankJournals } from '@/utils/decisionTreeMatcher';
+import { profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
 import { lookupLiveApc } from '@/lib/journal-apc';
 
 function getAdminClient() {
@@ -8,15 +8,6 @@ function getAdminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
-function coerceSubjectList(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => (typeof item === 'string' ? item : typeof item === 'object' && item && 'subject' in item && typeof (item as { subject?: unknown }).subject === 'string' ? (item as { subject: string }).subject : ''))
-      .filter(Boolean);
-  }
-  return [];
 }
 
 function coerceIndexList(value: unknown): string[] {
@@ -31,8 +22,8 @@ function coerceIndexList(value: unknown): string[] {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { manuscriptText?: unknown; field?: unknown; indexing?: unknown; quartile?: unknown; budget?: unknown };
-    if (typeof body.manuscriptText !== 'string' || body.manuscriptText.trim().length < 50) {
-      return NextResponse.json({ error: 'Manuscript text must be at least 50 characters.' }, { status: 400 });
+    if (typeof body.manuscriptText !== 'string' || body.manuscriptText.trim().length < 3) {
+      return NextResponse.json({ error: 'Add a title, abstract, or manuscript text before matching.' }, { status: 400 });
     }
 
     const maxBudget = typeof body.budget === 'number' && body.budget > 0 ? body.budget : null;
@@ -48,18 +39,19 @@ export async function POST(request: Request) {
       ? 'journal_indexings!inner(indexing_name)'
       : 'journal_indexings(indexing_name)';
 
-    const searchTerms = [...new Set([...manuscriptProfile.keywords, ...manuscriptProfile.topics])]
+    const topicTerms = manuscriptProfile.topics.flatMap((topic) => topicFamilies[topic]?.slice(0, 2) ?? []);
+    const searchTerms = [...new Set([...manuscriptProfile.topics, ...topicTerms, ...manuscriptProfile.keywords])]
       .map((term) => term.replace(/[^a-z0-9 -]/gi, '').trim())
       .filter((term) => term.length >= 4)
       .filter((term) => !['compounds', 'compound', 'positive', 'that', 'using', 'based', 'molecular', 'dynamics', 'network', 'simulation', 'research', 'analysis'].includes(term))
-      .slice(0, 8);
+      .slice(0, 10);
 
     function buildQuery(withKeywordSearch: boolean) {
       let nextQuery = database
         .from('journals')
         .select(`id,source_record_id,name,issn,eissn,publisher,field,source_type,subjects,quartile,oa,apc_display,indexed,scope,asjc_codes,requirements,sponsored,sponsor_tier,submission_url,${indexingRelation}`)
         .eq('source_type', 'Journal')
-        .limit(1000);
+        .limit(300);
 
       if (typeof body.field === 'string' && body.field !== 'Any field') {
         nextQuery = nextQuery.contains('subjects', [body.field]);
@@ -133,7 +125,10 @@ export async function POST(request: Request) {
       });
     }
 
-    const matches = rankedJournals.slice(0, 25);
+    // Do not present catalog rows that only matched a generic word from the manuscript.
+    const matches = rankedJournals
+      .filter(({ match }) => match.score >= 40)
+      .slice(0, 25);
     return NextResponse.json({ source: 'supabase', matches });
   } catch (error) {
     console.error('Journal match failed:', error);

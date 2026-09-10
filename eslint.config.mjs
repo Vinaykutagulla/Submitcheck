@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone data-import scripts run as CommonJS under Node.
+    "scripts/**",
   ]),
 ]);
 
