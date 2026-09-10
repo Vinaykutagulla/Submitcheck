@@ -293,6 +293,44 @@ button { cursor: pointer; }
 .verify-section.pass span { background: var(--moss); color: #fff; }
 .verify-section.warn { background: var(--amber-wash); color: #8A6425; }
 .verify-section.warn span { background: var(--gold); color: #fff; }
+.submit-view-new { display: block !important; }
+.submit-view-new ~ .view, .submit-view-new ~ .wrap .view { display: none !important; }
+.submit-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); min-height: 650px; border: 1px solid var(--rule); background: #e9e6de; }
+.submit-preview { overflow-y: auto; padding: 34px 6%; background: var(--paper); }
+.submit-rail { overflow-y: auto; padding: 18px 14px 28px; border-left: 1px solid var(--rule); background: #f5f2ea; }
+.submit-rail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 4px 4px 16px; }
+.submit-rail-head strong, .submit-rail-head span { display: block; }
+.submit-rail-head strong { font-size: 13px; }
+.submit-rail-head span { margin-top: 3px; color: var(--ink-soft); font-size: 11px; }
+.submit-checks { display: grid; gap: 7px; margin-bottom: 18px; }
+.submit-check { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--rule); background: var(--card); }
+.submit-check > span { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; background: var(--gold); color: #fff; font-size: 11px; font-weight: 700; }
+.submit-check.complete { border-left: 3px solid var(--moss); }
+.submit-check.complete > span { background: var(--moss); }
+.submit-check strong { font-size: 11px; }
+.submit-check em { color: var(--ink-soft); font-size: 10px; font-style: normal; }
+.submit-files { padding-top: 14px; border-top: 1px solid var(--rule); }
+.submit-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding: 10px; border: 1px solid var(--rule); background: var(--card); }
+.submit-file > div { min-width: 0; }
+.submit-file strong, .submit-file span { display: block; }
+.submit-file strong { font-size: 11px; }
+.submit-file span { margin-top: 3px; color: var(--ink-soft); font-size: 10px; line-height: 1.4; }
+.submit-file b { color: var(--moss); font-size: 10px; }
+.submit-file.recommended { border-left: 3px solid var(--gold); }
+.submit-file.optional { border-left: 3px solid var(--ink-faint); cursor: pointer; }
+.submit-file input { max-width: 115px; font-size: 10px; }
+.submit-field-label { display: block; margin-top: 10px; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+.submit-field-label textarea { display: block; width: 100%; min-height: 70px; margin-top: 5px; padding: 8px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); font-size: 11px; resize: vertical; }
+.submit-declarations { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.submit-actions { display: grid; gap: 8px; margin-top: 14px; }
+.submit-actions .btn { justify-content: center; }
+.submission-author-form { margin-top: 18px; padding: 22px 28px; border: 1px solid var(--rule); background: var(--card); }
+.submission-author-form label { display: block; margin-top: 11px; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+.submission-author-form input, .submission-author-form textarea { display: block; width: 100%; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); font-size: 12px; }
+.submission-author-form textarea { min-height: 58px; resize: vertical; }
+.submission-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.submission-author-form .contact-consent { display: flex; align-items: flex-start; gap: 8px; }
+.submission-author-form .contact-consent input { width: auto; margin-top: 2px; }
 .check-row { display: flex; gap: 10px; align-items: center; margin: 0; padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .submit-status { margin: 16px 0; padding: 16px 20px; border: 1px solid var(--gold); color: var(--gold); text-align: center; }
 .submission-package { display: grid; gap: 12px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule); }
@@ -386,6 +424,10 @@ button { cursor: pointer; }
   .format-page { padding: 28px 22px; }
   .verify-workspace { grid-template-columns: 1fr; }
   .verify-rail { border-top: 1px solid var(--rule); border-left: 0; }
+  .submit-workspace { grid-template-columns: 1fr; }
+  .submit-rail { border-top: 1px solid var(--rule); border-left: 0; }
+  .submission-author-form { padding: 18px; }
+  .submission-form-grid { grid-template-columns: 1fr; gap: 0; }
 }
 @media (max-width: 520px) {
   .header-actions { align-items: flex-start; }
