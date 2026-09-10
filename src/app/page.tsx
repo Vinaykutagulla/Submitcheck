@@ -845,6 +845,11 @@ export default function Home() {
     ? aiGaps.map(({ priority, title, description, example }) => ({ priority, title, description, example }))
     : chosenGaps;
   const applyGapDraft = (gap: { title: string; example: string }) => {
+    if (plan !== 'pro') {
+      setShowPricing(true);
+      setSaveMessage('Unlock Pro to apply journal-specific manuscript fixes. Your free writing suggestions remain available.');
+      return;
+    }
     setTrackedDraft({ title: gap.title, text: gap.example });
     setSaveMessage(`Tracked draft ready for “${gap.title}”. Review it before accepting.`);
   };
