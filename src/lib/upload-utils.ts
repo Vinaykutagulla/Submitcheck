@@ -4,6 +4,7 @@ export type ExtractedManuscript = {
   title: string;
   text: string;
   sourceType: 'pdf' | 'docx' | 'txt';
+  visualHtml?: string;
 };
 
 function normalizeWhitespace(value: string): string {
@@ -27,6 +28,20 @@ export async function extractTextFromDocx(file: File): Promise<string> {
   return normalizeWhitespace(result.value || '');
 }
 
+export async function extractVisualHtmlFromDocx(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.convertToHtml(
+    { arrayBuffer },
+    {
+      convertImage: mammoth.images.imgElement((image) => image.read('base64').then((value) => ({
+        src: `data:${image.contentType};base64,${value}`,
+        alt: 'Embedded manuscript figure',
+      }))),
+    },
+  );
+  return result.value || '';
+}
+
 export async function extractTextFromPdf(file: File): Promise<string> {
   const { PDFParse } = await import('pdf-parse');
   const arrayBuffer = await file.arrayBuffer();
@@ -44,11 +59,13 @@ export async function parseUploadedManuscript(file: File): Promise<ExtractedManu
   const extension = fileName.split('.').pop() ?? 'txt';
 
   let text = '';
+  let visualHtml: string | undefined;
 
   if (extension === 'pdf') {
     text = await extractTextFromPdf(file);
   } else if (extension === 'docx' || extension === 'doc') {
     text = await extractTextFromDocx(file);
+    visualHtml = await extractVisualHtmlFromDocx(file);
   } else {
     text = extractTextFromPlainText(await file.text());
   }
@@ -64,5 +81,6 @@ export async function parseUploadedManuscript(file: File): Promise<ExtractedManu
     title: title.slice(0, 180),
     text,
     sourceType: extension === 'pdf' ? 'pdf' : extension === 'docx' || extension === 'doc' ? 'docx' : 'txt',
+    visualHtml,
   };
 }
