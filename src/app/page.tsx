@@ -1053,23 +1053,6 @@ function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: J
   return <article className={sponsored ? 'journal-card sponsored' : 'journal-card'}>{sponsored && <div className="sponsor-flag">⭐ Sponsored · Featured</div>}<div className="journal-head"><div><h3>{journal.name}</h3><p>{journal.publisher} · {journal.field}</p><a className="journal-website-top" href={websiteUrl} target="_blank" rel="noreferrer">↗ {websiteLabel}</a><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.oa && <span className="tag oa">Free-to-publish</span>}{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}</div></div><div className="fit"><span>Scientific fit: <b className={match.score > 80 ? 'score-good' : 'score-caution'}>{match.score}%</b></span><em className={gaps.some((gap) => gap.priority === 'critical') ? 'concerns' : 'good'}>{match.confidence} confidence</em></div></div><div className="journal-meta"><span><small>APC</small>{liveApc?.amount ? `${liveApc.amount.toLocaleString()} ${liveApc.currency}` : 'Not verified'}</span><span><small>Speed</small>{liveApc?.publicationWeeks ? `${liveApc.publicationWeeks} weeks` : 'Not verified'}</span><span><small>Gaps found</small>{gaps.length}</span><span><small>Word limit</small>{journal.requirements.wordLimit ? `${journal.requirements.wordLimit} words` : 'Not listed'}</span></div><div className="match-reasons"><strong>Why this match</strong>{match.reasons.slice(0, 2).map((reason) => <span key={reason}>✓ {reason}</span>)}{match.warnings.slice(0, 1).map((warning) => <span className="warning" key={warning}>! {warning}</span>)}</div><div className="journal-actions"><button className="btn-small primary-btn" onClick={() => onSelect(journal)}>🔧 Fix</button><button className="btn-small" onClick={() => onSelect(journal)}>📐 Format</button>{(journal.issn || journal.eissn) && <button className="btn-small" onClick={checkLiveApc} disabled={apcLoading}>{apcLoading ? 'Fetching APC & speed...' : liveApc ? (liveApc.amount || liveApc.publicationWeeks ? '✓ Live details loaded' : 'No live details found') : 'Fetch APC & speed'}</button>}{liveApc?.apcUrl ? <a className="btn-small journal-link" href={liveApc.apcUrl} target="_blank" rel="noreferrer">↗ View APC source</a> : liveApc?.apcSearchUrl ? <a className="btn-small journal-link" href={liveApc.apcSearchUrl} target="_blank" rel="noreferrer">↗ Find APC pricing</a> : null}</div>{liveApc?.journalUrl ? <div className="live-source">Website fetched from {liveApc.source} · <a href={liveApc.journalUrl} target="_blank" rel="noreferrer">Open website</a></div> : liveApc?.apcSearchUrl ? <div className="live-source">No structured APC record found; search publisher pricing before submission.</div> : null}</article>;
 }
 
-function InlineManuscriptEditor({ text, suggestions, onTextChange }: { text: string; suggestions: Array<{ sentence: string; suggestion: string; reason: string; index: number }>; onTextChange: (value: string) => void }) {
-  const suggestionMap = new Map(suggestions.map((item) => [item.sentence, item]));
-  const sentences = splitIntoSentences(text);
-  let cursor = 0;
-
-  return <div className="editor editor-contenteditable inline-manuscript-editor" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')}>
-    {sentences.length ? sentences.map((sentence, index) => {
-      const start = text.indexOf(sentence, cursor);
-      const prefix = start > cursor ? text.slice(cursor, start) : '';
-      cursor = start >= 0 ? start + sentence.length : cursor + sentence.length;
-      const item = suggestionMap.get(sentence);
-      return <span key={`${index}-${sentence.slice(0, 20)}`}>{prefix}{item ? <mark className="inline-review-anchor" title={`${item.reason}. Review the comment on the right.`}>{sentence}</mark> : sentence}</span>;
-    }) : text}
-    {cursor < text.length ? text.slice(cursor) : null}
-  </div>;
-}
-
 function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextChange, title, appliedDrafts }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }> }) {
   const visible = plan === 'pro' ? gaps : [];
   const [copied, setCopied] = useState<string | null>(null);
