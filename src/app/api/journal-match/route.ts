@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     const searchTerms = [...new Set([...manuscriptProfile.keywords, ...manuscriptProfile.topics])]
       .map((term) => term.replace(/[^a-z0-9 -]/gi, '').trim())
       .filter((term) => term.length >= 4)
+      .filter((term) => !['compounds', 'compound', 'positive', 'that', 'using', 'based', 'molecular', 'dynamics', 'network', 'simulation', 'research', 'analysis'].includes(term))
       .slice(0, 8);
 
     function buildQuery(withKeywordSearch: boolean) {

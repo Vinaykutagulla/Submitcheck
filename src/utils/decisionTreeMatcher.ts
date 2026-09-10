@@ -64,7 +64,7 @@ const topicFamilies: Record<string, string[]> = {
 };
 
 const stopWords = new Set('about after again against also among because before being between both could does during each from further have having into itself more most other over same should some such than their there these they this those through under very what when where which while with would your'.split(' '));
-const genericMatchWords = new Set(['molecular', 'dynamics', 'network', 'simulation', 'model', 'study', 'research', 'analysis', 'method', 'methods', 'results', 'abstract', 'in-vitro', 'vitro']);
+const genericMatchWords = new Set(['molecular', 'dynamics', 'network', 'simulation', 'model', 'study', 'research', 'analysis', 'method', 'methods', 'results', 'abstract', 'in-vitro', 'vitro', 'compounds', 'compound', 'positive', 'that', 'using', 'based', 'chemical', 'chemicals']);
 
 function countWords(text: string) {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -74,14 +74,17 @@ function extractKeywords(text: string) {
   const titleText = text.match(/^title\s*:\s*(.+)$/im)?.[1] ?? '';
   const keywordText = text.match(/keywords?\s*:\s*([^\n]+)/i)?.[1] ?? '';
   const explicitWords = `${titleText} ${keywordText}`.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? [];
-  const words = text.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? [];
   const counts = new Map<string, number>();
   for (const word of explicitWords) {
     if (!stopWords.has(word)) counts.set(word, (counts.get(word) ?? 0) + 5);
   }
-  for (const word of words) {
-    if (stopWords.has(word)) continue;
-    counts.set(word, (counts.get(word) ?? 0) + 1);
+  const lower = (text.match(/^(?:[\s\S]*?)(?=\n\s*(?:introduction|1\.?\s+introduction)\b)/i)?.[0] ?? text.slice(0, 12000)).toLowerCase();
+  for (const terms of Object.values(topicFamilies)) {
+    for (const term of terms) {
+      if (term.length >= 6 && lower.includes(term) && !genericMatchWords.has(term)) {
+        counts.set(term, (counts.get(term) ?? 0) + 3);
+      }
+    }
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -92,23 +95,31 @@ function extractKeywords(text: string) {
 
 export function profileManuscript(text: string): ManuscriptProfile {
   const lower = text.toLowerCase();
+  const frontMatter = (text.match(/^(?:[\s\S]*?)(?=\n\s*(?:introduction|1\.?\s+introduction)\b)/i)?.[0] ?? text.slice(0, 12000)).toLowerCase();
   const fieldScores = Object.entries(fieldSignals).map(([field, terms]) => ({
     field,
     score: terms.filter((term) => lower.includes(term)).length,
   })).sort((a, b) => b.score - a.score);
   const field = fieldScores[0]?.score ? fieldScores[0].field : 'Multidisciplinary';
-  const articleType = /review|systematic review|meta-analysis|literature search/.test(lower)
-    ? 'Review'
+  const hasExperimentalResearch = /experimental validation|in[- ]vitro|in[- ]vivo|cytotoxicity|cell line|molecular docking|lc[- ](?:esi[- ])?qtof|mass spectrometry|we investigated|we evaluated/.test(lower);
+  const articleType = hasExperimentalResearch
+    ? 'Research'
     : /case report|case study|single patient/.test(lower)
       ? 'Case study'
       : /protocol|benchmark|dataset|software package/.test(lower)
         ? 'Methods'
-        : /methods|participants|sample size|experiment|we conducted/.test(lower)
+        : /review|systematic review|meta-analysis|literature search/.test(lower)
+          ? 'Review'
+          : /methods|participants|sample size|experiment|we conducted/.test(lower)
           ? 'Research'
           : 'Unknown';
-  const topics = Object.entries(topicFamilies)
-    .filter(([topic, terms]) => terms.filter((term) => lower.includes(term)).length >= (topic === 'engineering' ? 2 : 1))
+  let topics = Object.entries(topicFamilies)
+    .filter(([topic, terms]) => terms.filter((term) => frontMatter.includes(term)).length >= (topic === 'engineering' ? 2 : 1))
     .map(([topic]) => topic);
+  const specificBiomedicalTopics = ['pharmacology', 'natural products', 'analytical profiling', 'molecular pharmacology'];
+  if (specificBiomedicalTopics.some((topic) => topics.includes(topic))) {
+    topics = topics.filter((topic) => !['chemistry', 'synthesis', 'medicine'].includes(topic));
+  }
   const methods = ['lc-ms', 'mass spectrometry', 'molecular docking', 'molecular dynamics', 'admet', 'survey', 'interview', 'randomized', 'in vitro', 'in vivo', 'regression', 'qualitative', 'systematic review']
     .filter((method) => lower.includes(method));
 
