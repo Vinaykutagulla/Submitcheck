@@ -1113,6 +1113,7 @@ function SubmissionAuthorForm({ authorName, onAuthorName, authorAffiliation, onA
 function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, onUnlock }: { selected: Journal; text: string; title: string; formatDone: boolean; verifyDone: boolean; fixed: string[]; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; onUnlock: () => void }) {
   const [graphicalAbstract, setGraphicalAbstract] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
+  const [titlePageStatus, setTitlePageStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
   const titleValue = title || titleFromManuscript(text) || 'Add a manuscript title';
   const abstractValue = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() || 'Abstract not detected.';
   const checks = [
@@ -1125,14 +1126,23 @@ function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed,
   ];
   const complete = checks.filter(([, done]) => done).length;
   const downloadTitlePage = async () => {
-    const doc = new Document({ sections: [{ children: [new Paragraph({ text: titleValue, heading: 'Title' }), new Paragraph({ text: authorName || 'Corresponding author not added' }), new Paragraph({ text: authorAffiliation || 'Affiliation not added' }), new Paragraph({ text: authorOrcid ? `ORCID: ${authorOrcid}` : 'ORCID not provided' }), new Paragraph({ text: `Funding: ${fundingStatement}` }), new Paragraph({ text: `Competing interests: ${conflictStatement}` }), new Paragraph({ text: `Data availability: ${dataStatement}` })] }] });
-    const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${titleValue.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'title-page'}-title-page.docx`;
-    link.click();
-    URL.revokeObjectURL(url);
+    if (titlePageStatus === 'generating') return;
+    setTitlePageStatus('generating');
+    try {
+      const doc = new Document({ sections: [{ children: [new Paragraph({ text: titleValue, heading: 'Title' }), new Paragraph({ text: authorName || 'Corresponding author not added' }), new Paragraph({ text: authorAffiliation || 'Affiliation not added' }), new Paragraph({ text: authorOrcid ? `ORCID: ${authorOrcid}` : 'ORCID not provided' }), new Paragraph({ text: `Funding: ${fundingStatement}` }), new Paragraph({ text: `Competing interests: ${conflictStatement}` }), new Paragraph({ text: `Data availability: ${dataStatement}` })] }] });
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${titleValue.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'title-page'}-title-page.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setTitlePageStatus('ready');
+    } catch {
+      setTitlePageStatus('error');
+    }
   };
 
   return <div className="submit-workspace"><div className="submit-preview"><div className="format-page"><div className="format-title">{titleValue}</div><div className="format-meta">Submission package · {selected.name}</div><div className="format-divider" /><h3>Author details</h3><p>{authorName || 'Corresponding author not added'}<br />{authorAffiliation || 'Affiliation not added'}{authorOrcid && <><br />ORCID: {authorOrcid}</>}</p><h3>Abstract</h3><p>{abstractValue}</p><h3>Declarations</h3><p>Funding: {fundingStatement}<br />Conflicts: {conflictStatement}<br />Data: {dataStatement}</p><h3>Additional files</h3><p>{graphicalAbstract ? `Graphical abstract: ${graphicalAbstract.name}` : 'Graphical abstract: not uploaded'}</p></div></div><aside className="submit-rail"><div className="submit-rail-head"><div><strong>Submission package</strong><span>{selected.name}</span></div><span className="verify-count">{complete}/{checks.length}</span></div><div className="submit-checks">{checks.map(([label, done]) => <div className={`submit-check ${done ? 'complete' : 'missing'}`} key={label as string}><span>{done ? '✓' : '!'}</span><strong>{label as string}</strong><em>{done ? 'Complete' : 'Needs attention'}</em></div>)}</div><div className="submit-files"><div className="verify-group-label">Submission files</div><div className="submit-file required"><div><strong>Main manuscript</strong><span>Ready from manuscript editor</span></div><b>Ready</b></div><div className="submit-file recommended"><div><strong>Separate title page</strong><span>Recommended · includes author details and declarations</span></div><button className="btn-small" onClick={downloadTitlePage}>Download DOCX</button></div><label className="submit-file optional"><div><strong>Graphical abstract</strong><span>{selected.oa ? 'Optional unless author instructions require it' : 'Optional · upload if requested by the journal'}</span></div><input type="file" accept="image/png,image/jpeg,image/tiff" onChange={(event) => setGraphicalAbstract(event.target.files?.[0] || null)} /></label><label className="submit-field-label">Cover letter (optional)<textarea value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} placeholder="Add a short cover letter for the editor..." /></label></div><div className="submit-declarations"><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div><div className="submit-actions"><button className="btn btn-success" disabled={!declarationsConfirmed} onClick={() => window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank')}>Open journal portal</button><button className="btn btn-secondary" onClick={onUnlock}>Submission options</button></div></aside></div>;
