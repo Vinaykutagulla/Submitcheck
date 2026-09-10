@@ -246,6 +246,13 @@ button { cursor: pointer; }
 .format-rail-head strong, .format-rail-head span { display: block; }
 .format-rail-head strong { font-size: 13px; }
 .format-rail-head span { margin-top: 3px; color: var(--ink-soft); font-size: 11px; }
+.live-instructions { display: grid; gap: 9px; margin-bottom: 12px; padding: 10px; border: 1px solid var(--rule); background: var(--moss-soft); }
+.live-instructions strong, .live-instructions span { display: block; }
+.live-instructions strong { color: var(--moss); font-size: 11px; }
+.live-instructions span { margin-top: 3px; color: var(--ink-soft); font-size: 10px; line-height: 1.45; }
+.live-instruction-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+.live-instruction-actions a { color: inherit; text-decoration: none; }
+.live-instruction-actions button:disabled { cursor: wait; opacity: .6; }
 .format-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; padding: 10px; border: 1px solid var(--rule); background: var(--card); color: var(--ink-soft); font-size: 12px; }
 .format-rule-card { margin-bottom: 10px; padding: 12px; border: 1px solid var(--rule); border-radius: 7px; background: var(--card); box-shadow: 0 1px 2px rgba(33, 29, 26, .05); }
 .format-rule-card.mismatch { border-left: 3px solid var(--shu); }

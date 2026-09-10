@@ -1041,6 +1041,8 @@ function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: {
 
 function FormatPanel({ selected, text, onUnlock, onReviewed }: { selected: Journal; text: string; onUnlock: () => void; onReviewed: () => void }) {
   const [fixedRules, setFixedRules] = useState<string[]>([]);
+  const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string } | null>(null);
+  const [fetchingInstructions, setFetchingInstructions] = useState(false);
   const titleMatch = titleFromManuscript(text) || 'Untitled manuscript';
   const abstract = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
   const references = text.match(/references\s*:?[\s\S]*$/i)?.[0] ?? '';
@@ -1061,8 +1063,25 @@ function FormatPanel({ selected, text, onUnlock, onReviewed }: { selected: Journ
     setFixedRules(rules.map((rule) => rule.id));
     onReviewed();
   };
+  const fetchInstructions = async () => {
+    const issn = selected.issn || selected.eissn;
+    if (!issn) {
+      setLiveInstructions({ url: selected.authorInstructionsUrl || selected.submissionUrl || null, source: 'Journal record', checkedAt: new Date().toISOString() });
+      return;
+    }
+    setFetchingInstructions(true);
+    try {
+      const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(issn)}&title=${encodeURIComponent(selected.name)}`);
+      const payload = await response.json() as { authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string };
+      setLiveInstructions({ url: payload.authorInstructionsUrl || payload.journalUrl || selected.authorInstructionsUrl || selected.submissionUrl || null, source: payload.source || 'Live journal lookup', checkedAt: new Date().toISOString() });
+    } catch {
+      setLiveInstructions({ url: selected.authorInstructionsUrl || selected.submissionUrl || null, source: 'Catalog record', checkedAt: new Date().toISOString() });
+    } finally {
+      setFetchingInstructions(false);
+    }
+  };
 
-  return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div><button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button></div><div className="format-summary"><strong>{openRules.length === 0 ? 'All rules reviewed' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><button className="btn btn-primary btn-small" onClick={fixAll} disabled={openRules.length === 0}>Fix all</button></div>{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Mismatch'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{!done && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
+  return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div><button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button></div><div className="live-instructions"><div><strong>{liveInstructions ? 'Live source checked' : 'Live instructions not checked'}</strong><span>{liveInstructions ? `${liveInstructions.source} · ${new Date(liveInstructions.checkedAt).toLocaleTimeString()}` : 'Fetch the publisher or DOAJ author instructions before submission.'}</span></div><div className="live-instruction-actions"><button className="btn-small" onClick={fetchInstructions} disabled={fetchingInstructions}>{fetchingInstructions ? 'Checking...' : 'Fetch live rules'}</button>{liveInstructions?.url && <a className="btn-small" href={liveInstructions.url} target="_blank" rel="noreferrer">Open source</a>}</div></div><div className="format-summary"><strong>{openRules.length === 0 ? 'All rules reviewed' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><button className="btn btn-primary btn-small" onClick={fixAll} disabled={openRules.length === 0}>Fix all</button></div>{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Mismatch'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{!done && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
 }
 
 function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal, nextStep?: number) => void }) {
