@@ -1227,21 +1227,6 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     });
     document.querySelectorAll<HTMLElement>('.comment-card').forEach((card, position) => {
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    const handleInput = (event: Event) => {
-      const target = event.currentTarget as HTMLElement;
-      const editorText = Array.from(target.childNodes)
-        .filter((node) => !(node instanceof HTMLElement && node.classList.contains('embedded-document-preview')))
-        .map((node) => node.textContent ?? '')
-        .join('');
-      event.stopImmediatePropagation();
-      onTextChange(editorText);
-    };
-    editor.addEventListener('input', handleInput, true);
-    return () => editor.removeEventListener('input', handleInput, true);
-  }, [onTextChange]);
       const item = sentenceSuggestions[position];
       if (item) {
         card.dataset.commentIndex = String(item.index);
@@ -1265,6 +1250,22 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
       };
     });
   }, [text, sentenceSuggestions, activeSentenceSuggestions, resolvedSentenceIndexes]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const handleInput = (event: Event) => {
+      const target = event.currentTarget as HTMLElement;
+      const editorText = Array.from(target.childNodes)
+        .filter((node) => !(node instanceof HTMLElement && node.classList.contains('embedded-document-preview')))
+        .map((node) => node.textContent ?? '')
+        .join('');
+      event.stopImmediatePropagation();
+      onTextChange(editorText);
+    };
+    editor.addEventListener('input', handleInput, true);
+    return () => editor.removeEventListener('input', handleInput, true);
+  }, [onTextChange]);
 
   const copySuggestion = async (gap: ReturnType<typeof getGaps>[number]) => {
     await navigator.clipboard.writeText(gap.example);
