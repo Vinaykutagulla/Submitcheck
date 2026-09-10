@@ -868,7 +868,6 @@ export default function Home() {
   return (
     <main className="jmatch-shell">
       {step === 5 && selected && <section className="view submit-view-new"><SubmissionPanel selected={selected} text={text} title={title} formatDone={formatDone} verifyDone={verifyDone} fixed={fixed} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} authorName={authorName} authorAffiliation={authorAffiliation} authorOrcid={authorOrcid} fundingStatement={fundingStatement} conflictStatement={conflictStatement} dataStatement={dataStatement} onUnlock={() => setShowPricing(true)} /><SubmissionAuthorForm authorName={authorName} onAuthorName={setAuthorName} authorAffiliation={authorAffiliation} onAuthorAffiliation={setAuthorAffiliation} authorOrcid={authorOrcid} onAuthorOrcid={setAuthorOrcid} fundingStatement={fundingStatement} onFundingStatement={setFundingStatement} conflictStatement={conflictStatement} onConflictStatement={setConflictStatement} dataStatement={dataStatement} onDataStatement={setDataStatement} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} /></section>}
-      {step === 2 && selected && manuscriptVisualHtml && <EmbeddedDocumentPreview html={manuscriptVisualHtml} />}
       <header className="letterhead">
         <div className="letterhead-inner">
           <div>
@@ -1113,10 +1112,6 @@ function SubmissionAuthorForm({ authorName, onAuthorName, authorAffiliation, onA
   return <div className="submission-author-form"><div className="panel-label">Author details and declarations</div><div className="submission-form-grid"><label>Corresponding author<input value={authorName} onChange={(event) => onAuthorName(event.target.value)} placeholder="Full name" /></label><label>Affiliation<input value={authorAffiliation} onChange={(event) => onAuthorAffiliation(event.target.value)} placeholder="University, department, country" /></label></div><label>ORCID (optional)<input value={authorOrcid} onChange={(event) => onAuthorOrcid(event.target.value)} placeholder="0000-0000-0000-0000" /></label><label>Funding statement<textarea value={fundingStatement} onChange={(event) => onFundingStatement(event.target.value)} /></label><label>Competing interests<textarea value={conflictStatement} onChange={(event) => onConflictStatement(event.target.value)} /></label><label>Data availability statement<textarea value={dataStatement} onChange={(event) => onDataStatement(event.target.value)} /></label><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div>;
 }
 
-function EmbeddedDocumentPreview({ html }: { html: string }) {
-  return <section className="embedded-document-preview"><div className="embedded-preview-head"><strong>Embedded figures and tables</strong><span>Imported from the uploaded DOCX</span></div><div className="embedded-preview-body" dangerouslySetInnerHTML={{ __html: html }} /></section>;
-}
-
 function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, onUnlock }: { selected: Journal; text: string; title: string; formatDone: boolean; verifyDone: boolean; fixed: string[]; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; onUnlock: () => void }) {
   const [graphicalAbstract, setGraphicalAbstract] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
@@ -1209,7 +1204,14 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     });
     fragment.append(text.slice(cursor));
     editor.replaceChildren(fragment);
-  }, [text, sentenceSuggestions]);
+    if (visualHtml) {
+      const embedded = document.createElement('section');
+      embedded.className = 'embedded-document-preview embedded-document-inline';
+      embedded.contentEditable = 'false';
+      embedded.innerHTML = `<div class="embedded-preview-head"><strong>Embedded figures and tables</strong><span>Imported from the uploaded DOCX</span></div><div class="embedded-preview-body">${visualHtml}</div>`;
+      editor.appendChild(embedded);
+    }
+  }, [text, sentenceSuggestions, visualHtml]);
 
   useEffect(() => {
     const editor = editorRef.current;
