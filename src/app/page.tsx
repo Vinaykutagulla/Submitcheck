@@ -992,7 +992,7 @@ export default function Home() {
 
         {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} />}</section>}
 
-        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
+        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
         {step === 4 && (selected ? <section className="view"><VerifyPanel selected={selected} text={text} plan={plan} onUnlock={() => setShowPricing(true)} onCompleted={() => setVerifyDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="empty">🔍<br />Select a journal first to run submission-readiness checks.</div></div></section>)}
 
@@ -1029,7 +1029,7 @@ function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: {
   return <section className="tracked-change-panel panel" aria-label="Tracked manuscript change"><div className="tracked-change-head"><strong>Tracked change: {draft.title}</strong><span>Red text is a proposed insertion. Review it before accepting.</span></div><textarea className="tracked-change-editor" value={draft.text} onChange={(event) => onChange(event.target.value)} /><div className="row"><button className="btn btn-primary" onClick={onAccept}>✓ Accept change</button><button className="btn btn-secondary" onClick={onReject}>Reject</button></div></section>;
 }
 
-function FormatPanel({ selected, text, onUnlock, onReviewed }: { selected: Journal; text: string; onUnlock: () => void; onReviewed: () => void }) {
+function FormatPanel({ selected, text, visualHtml, onUnlock, onReviewed }: { selected: Journal; text: string; visualHtml: string; onUnlock: () => void; onReviewed: () => void }) {
   const [fixedRules, setFixedRules] = useState<string[]>([]);
   const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string } | null>(null);
   const [fetchingInstructions, setFetchingInstructions] = useState(false);
@@ -1059,6 +1059,11 @@ function FormatPanel({ selected, text, onUnlock, onReviewed }: { selected: Journ
       setLiveInstructions({ url: selected.authorInstructionsUrl || selected.submissionUrl || null, source: 'Journal record', checkedAt: new Date().toISOString() });
       return;
     }
+    useEffect(() => {
+      const preview = document.querySelector<HTMLElement>('.format-manuscript');
+      if (!preview || !visualHtml) return;
+      preview.innerHTML = visualHtml;
+    }, [visualHtml]);
     setFetchingInstructions(true);
     try {
       const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(issn)}&title=${encodeURIComponent(selected.name)}`);
