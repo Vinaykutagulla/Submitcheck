@@ -180,6 +180,10 @@ function wordCount(value: string) {
   return value.trim() ? value.trim().split(/\s+/).length : 0;
 }
 
+function titleFromManuscript(value: string) {
+  return value.match(/^title\s*:\s*(.+)$/im)?.[1]?.trim() || value.split(/\n+/).find((line) => line.trim() && !/^(abstract|keywords?|introduction|methods?|results?|discussion|references?)\b/i.test(line.trim()))?.trim() || '';
+}
+
 function splitIntoSentences(text: string) {
   return text
     .split(/(?<=[.!?])\s+/)
@@ -998,7 +1002,7 @@ export default function Home() {
 
         {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} />}</section>}
 
-        {step === 3 && <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">{selected?.name ?? 'Select a journal in Find first.'}</div><button className="btn btn-primary" onClick={() => plan === 'pro' ? setFormatDone(true) : setShowPricing(true)}>📐 Get formatting rules</button></div>{formatDone && selected ? <div className="panel rules"><div className="verdict green">📐 Formatting rules <small>for {selected.name}</small></div><p><strong>Abstract</strong><span>{selected.requirements.abstract === 'structured' ? 'Structured (Background/Methods/Results/Conclusion)' : 'Unstructured, ~250 words'}</span></p><p><strong>Word limit</strong><span>{selected.requirements.wordLimit} words</span></p><p><strong>References</strong><span>{selected.requirements.refStyle} style</span></p><p><strong>Section order</strong><span>Title, Abstract, Keywords, Introduction, Methods, Results, Discussion, References</span></p></div> : <div className="locked-card"><div className="blur-line tall">Title, abstract, reference style, word limit and section order</div><div className="locked-overlay">🔒<strong>Formatting rules are a Pro feature</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock formatting</button></div></div>}</section>}
+        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
         {step === 4 && <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="quick-tip">We check what matters. No fake AI-detection percentages — honest signals and readiness checks.</div><button className="btn btn-primary" onClick={() => plan === 'pro' ? setVerifyDone(true) : setShowPricing(true)}>🔍 Run checks</button></div>{verifyDone ? <div className="panel rules"><div className="verdict yellow">{allChecks.filter(([, done]) => done).length}/{allChecks.length} checks passed</div>{allChecks.map(([label, done]) => <p key={label as string}><span>{label as string}</span><strong className={done ? 'pass' : 'warn'}>{done ? '✅ Pass' : '⚠️ Check'}</strong></p>)}</div> : <div className="locked-card"><div className="blur-line tall">Completeness, references, declarations, and writing-quality signals</div><div className="locked-overlay">🔒<strong>Integrity checks are a Pro feature</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock verify</button></div></div>}</section>}
 
@@ -1035,7 +1039,33 @@ function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: {
   return <section className="tracked-change-panel panel" aria-label="Tracked manuscript change"><div className="tracked-change-head"><strong>Tracked change: {draft.title}</strong><span>Red text is a proposed insertion. Review it before accepting.</span></div><textarea className="tracked-change-editor" value={draft.text} onChange={(event) => onChange(event.target.value)} /><div className="row"><button className="btn btn-primary" onClick={onAccept}>✓ Accept change</button><button className="btn btn-secondary" onClick={onReject}>Reject</button></div></section>;
 }
 
-function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal) => void }) {
+function FormatPanel({ selected, text, onUnlock, onReviewed }: { selected: Journal; text: string; onUnlock: () => void; onReviewed: () => void }) {
+  const [fixedRules, setFixedRules] = useState<string[]>([]);
+  const titleMatch = titleFromManuscript(text) || 'Untitled manuscript';
+  const abstract = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
+  const references = text.match(/references\s*:?[\s\S]*$/i)?.[0] ?? '';
+  const hasSections = ['introduction', 'methods', 'results', 'discussion'].every((section) => new RegExp(`(?:^|\\n)\\s*(?:\\d+\\.?\\s*)?${section}\\b`, 'i').test(text));
+  const rules = [
+    { id: 'title', name: 'Title and front matter', source: 'A clear title should appear before the abstract.', detail: titleMatch === 'Untitled manuscript' ? 'No manuscript title was detected.' : 'Title detected and ready for journal formatting.', fixed: titleMatch !== 'Untitled manuscript' },
+    { id: 'abstract', name: 'Abstract structure', source: selected.requirements.abstract === 'structured' ? 'Use Background, Methods, Results, and Conclusion headings.' : 'Provide a concise unstructured abstract before keywords.', detail: abstract ? `${wordCount(abstract)} words detected.` : 'Abstract not detected.', fixed: Boolean(abstract) },
+    { id: 'references', name: 'Reference style', source: `References should follow ${selected.requirements.refStyle} style.`, detail: references ? 'Reference section detected; verify each entry before submission.' : 'Reference section not detected.', fixed: Boolean(references) },
+    { id: 'sections', name: 'Section order', source: 'Title, Abstract, Keywords, Introduction, Methods, Results, Discussion, References.', detail: hasSections ? 'Core manuscript sections detected.' : 'One or more core sections are missing.', fixed: hasSections },
+    { id: 'word-limit', name: 'Word limit', source: selected.requirements.wordLimit ? `Stay within ${selected.requirements.wordLimit} words.` : 'No catalog word limit is listed for this journal.', detail: selected.requirements.wordLimit ? `${wordCount(text)} / ${selected.requirements.wordLimit} words.` : 'Confirm the limit in the journal instructions.', fixed: selected.requirements.wordLimit === null || wordCount(text) <= selected.requirements.wordLimit },
+  ];
+  const openRules = rules.filter((rule) => !rule.fixed && !fixedRules.includes(rule.id));
+  const fixRule = (id: string) => {
+    setFixedRules((current) => current.includes(id) ? current : [...current, id]);
+    if (rules.every((rule) => rule.fixed || rule.id === id || fixedRules.includes(rule.id))) onReviewed();
+  };
+  const fixAll = () => {
+    setFixedRules(rules.map((rule) => rule.id));
+    onReviewed();
+  };
+
+  return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div><button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button></div><div className="format-summary"><strong>{openRules.length === 0 ? 'All rules reviewed' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><button className="btn btn-primary btn-small" onClick={fixAll} disabled={openRules.length === 0}>Fix all</button></div>{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Mismatch'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{!done && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
+}
+
+function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal, nextStep?: number) => void }) {
   const [liveApc, setLiveApc] = useState<{ source?: string; amount: number | null; currency: string | null; hasApc: boolean; apcUrl: string | null; apcSearchUrl?: string | null; journalUrl: string | null; searchUrl?: string | null; authorInstructionsUrl: string | null; publicationWeeks: number | null } | null>(null);
   const [apcLoading, setApcLoading] = useState(false);
 
