@@ -401,6 +401,7 @@ export default function Home() {
   const [account, setAccount] = useState<{ fullName: string; email: string } | null>(null);
   const [text, setText] = useState('');
   const [manuscriptVisualHtml, setManuscriptVisualHtml] = useState('');
+  const [embeddedMedia, setEmbeddedMedia] = useState<Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>>([]);
   const [title, setTitle] = useState('');
   const [field, setField] = useState('Any field');
   const [indexing, setIndexing] = useState('Any indexing');
@@ -556,6 +557,7 @@ export default function Home() {
       setTitle(extracted.title);
       setText(extracted.text);
       setManuscriptVisualHtml(extracted.visualHtml || '');
+      setEmbeddedMedia(extracted.embeddedMedia || []);
       setRemoteMatches(null);
       setSelected(null);
       setAiGaps([]);
@@ -989,7 +991,7 @@ export default function Home() {
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
         </>}
 
-        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} />}</section>}
+        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} />}</section>}
 
         {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
@@ -1173,7 +1175,7 @@ function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: J
   return <article className={sponsored ? 'journal-card sponsored' : 'journal-card'}>{sponsored && <div className="sponsor-flag">⭐ Sponsored · Featured</div>}<div className="journal-head"><div><h3>{journal.name}</h3><p>{journal.publisher} · {journal.field}</p><a className="journal-website-top" href={websiteUrl} target="_blank" rel="noreferrer">↗ {websiteLabel}</a><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.oa && <span className="tag oa">Free-to-publish</span>}{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}</div></div><div className="fit"><span>Scientific fit: <b className={match.score > 80 ? 'score-good' : 'score-caution'}>{match.score}%</b></span><em className={gaps.some((gap) => gap.priority === 'critical') ? 'concerns' : 'good'}>{match.confidence} confidence</em></div></div><div className="journal-meta"><span><small>APC</small>{liveApc?.amount ? `${liveApc.amount.toLocaleString()} ${liveApc.currency}` : 'Not verified'}</span><span><small>Speed</small>{liveApc?.publicationWeeks ? `${liveApc.publicationWeeks} weeks` : 'Not verified'}</span><span><small>Gaps found</small>{gaps.length}</span><span><small>Word limit</small>{journal.requirements.wordLimit ? `${journal.requirements.wordLimit} words` : 'Not listed'}</span></div><div className="match-reasons"><strong>Why this match</strong>{match.reasons.slice(0, 2).map((reason) => <span key={reason}>✓ {reason}</span>)}{match.warnings.slice(0, 1).map((warning) => <span className="warning" key={warning}>! {warning}</span>)}</div><div className="journal-actions"><button className="btn-small primary-btn" onClick={() => onSelect(journal)}>🔧 Fix</button><button className="btn-small" onClick={() => onSelect(journal)}>📐 Format</button>{(journal.issn || journal.eissn) && <button className="btn-small" onClick={checkLiveApc} disabled={apcLoading}>{apcLoading ? 'Fetching APC & speed...' : liveApc ? (liveApc.amount || liveApc.publicationWeeks ? '✓ Live details loaded' : 'No live details found') : 'Fetch APC & speed'}</button>}{liveApc?.apcUrl ? <a className="btn-small journal-link" href={liveApc.apcUrl} target="_blank" rel="noreferrer">↗ View APC source</a> : liveApc?.apcSearchUrl ? <a className="btn-small journal-link" href={liveApc.apcSearchUrl} target="_blank" rel="noreferrer">↗ Find APC pricing</a> : null}</div>{liveApc?.journalUrl ? <div className="live-source">Website fetched from {liveApc.source} · <a href={liveApc.journalUrl} target="_blank" rel="noreferrer">Open website</a></div> : liveApc?.apcSearchUrl ? <div className="live-source">No structured APC record found; search publisher pricing before submission.</div> : null}</article>;
 }
 
-function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextChange, title, appliedDrafts, visualHtml }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string }) {
+function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextChange, title, appliedDrafts, visualHtml, embeddedMedia }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> }) {
   void visualHtml;
   const visible = plan === 'pro' ? gaps : [];
   const [copied, setCopied] = useState<string | null>(null);
@@ -1204,16 +1206,37 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     });
     fragment.append(text.slice(cursor));
     editor.replaceChildren(fragment);
-    if (visualHtml) {
-      const embedded = document.createElement('div');
-      embedded.className = 'embedded-document-inline';
-      embedded.contentEditable = 'false';
-      const source = new DOMParser().parseFromString(visualHtml, 'text/html');
-      const media = source.querySelectorAll('table, img, figure');
-      media.forEach((element) => embedded.appendChild(document.importNode(element, true)));
-      if (media.length > 0) editor.appendChild(embedded);
-    }
-  }, [text, sentenceSuggestions, visualHtml]);
+    embeddedMedia.forEach((media) => {
+      const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+      let node: Node | null = walker.nextNode();
+      let inserted = false;
+      while (node) {
+        const value = node.textContent || '';
+        const anchor = media.afterText.trim();
+        const position = anchor ? value.lastIndexOf(anchor) : -1;
+        if (position >= 0) {
+          const range = document.createRange();
+          range.setStart(node, position + anchor.length);
+          range.collapse(true);
+          const embedded = document.createElement('div');
+          embedded.className = 'embedded-document-inline';
+          embedded.contentEditable = 'false';
+          embedded.innerHTML = media.html;
+          range.insertNode(embedded);
+          inserted = true;
+          break;
+        }
+        node = walker.nextNode();
+      }
+      if (!inserted) {
+        const embedded = document.createElement('div');
+        embedded.className = 'embedded-document-inline';
+        embedded.contentEditable = 'false';
+        embedded.innerHTML = media.html;
+        editor.appendChild(embedded);
+      }
+    });
+  }, [text, sentenceSuggestions, visualHtml, embeddedMedia]);
 
   useEffect(() => {
     const editor = editorRef.current;

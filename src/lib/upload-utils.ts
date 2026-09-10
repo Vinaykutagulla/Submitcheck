@@ -5,6 +5,7 @@ export type ExtractedManuscript = {
   text: string;
   sourceType: 'pdf' | 'docx' | 'txt';
   visualHtml?: string;
+  embeddedMedia?: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>;
 };
 
 function normalizeWhitespace(value: string): string {
@@ -42,6 +43,35 @@ export async function extractVisualHtmlFromDocx(file: File): Promise<string> {
   return result.value || '';
 }
 
+export async function extractEmbeddedMediaFromDocx(file: File): Promise<Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>> {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.convertToHtml(
+    { arrayBuffer },
+    {
+      convertImage: mammoth.images.imgElement((image) => image.read('base64').then((value) => ({
+        src: `data:${image.contentType};base64,${value}`,
+        alt: 'Embedded manuscript figure',
+      }))),
+    },
+  );
+  const source = new DOMParser().parseFromString(result.value || '', 'text/html');
+  const media: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> = [];
+  source.querySelectorAll('table, img, figure').forEach((element) => {
+    let previous = element.previousElementSibling;
+    let afterText = '';
+    while (previous && !afterText) {
+      afterText = (previous.textContent || '').replace(/\s+/g, ' ').trim();
+      previous = previous.previousElementSibling;
+    }
+    media.push({
+      type: element.tagName.toLowerCase() === 'table' ? 'table' : element.tagName.toLowerCase() === 'figure' ? 'figure' : 'image',
+      html: element.outerHTML,
+      afterText: afterText.slice(-240),
+    });
+  });
+  return media;
+}
+
 export async function extractTextFromPdf(file: File): Promise<string> {
   const { PDFParse } = await import('pdf-parse');
   const arrayBuffer = await file.arrayBuffer();
@@ -60,12 +90,14 @@ export async function parseUploadedManuscript(file: File): Promise<ExtractedManu
 
   let text = '';
   let visualHtml: string | undefined;
+  let embeddedMedia: ExtractedManuscript['embeddedMedia'];
 
   if (extension === 'pdf') {
     text = await extractTextFromPdf(file);
   } else if (extension === 'docx' || extension === 'doc') {
     text = await extractTextFromDocx(file);
     visualHtml = await extractVisualHtmlFromDocx(file);
+    embeddedMedia = await extractEmbeddedMediaFromDocx(file);
   } else {
     text = extractTextFromPlainText(await file.text());
   }
@@ -82,5 +114,6 @@ export async function parseUploadedManuscript(file: File): Promise<ExtractedManu
     text,
     sourceType: extension === 'pdf' ? 'pdf' : extension === 'docx' || extension === 'doc' ? 'docx' : 'txt',
     visualHtml,
+    embeddedMedia,
   };
 }
