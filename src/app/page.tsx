@@ -1205,11 +1205,13 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     fragment.append(text.slice(cursor));
     editor.replaceChildren(fragment);
     if (visualHtml) {
-      const embedded = document.createElement('section');
-      embedded.className = 'embedded-document-preview embedded-document-inline';
+      const embedded = document.createElement('div');
+      embedded.className = 'embedded-document-inline';
       embedded.contentEditable = 'false';
-      embedded.innerHTML = `<div class="embedded-preview-head"><strong>Embedded figures and tables</strong><span>Imported from the uploaded DOCX</span></div><div class="embedded-preview-body">${visualHtml}</div>`;
-      editor.appendChild(embedded);
+      const source = new DOMParser().parseFromString(visualHtml, 'text/html');
+      const media = source.querySelectorAll('table, img, figure');
+      media.forEach((element) => embedded.appendChild(document.importNode(element, true)));
+      if (media.length > 0) editor.appendChild(embedded);
     }
   }, [text, sentenceSuggestions, visualHtml]);
 
@@ -1257,7 +1259,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, text, onTextCha
     const handleInput = (event: Event) => {
       const target = event.currentTarget as HTMLElement;
       const editorText = Array.from(target.childNodes)
-        .filter((node) => !(node instanceof HTMLElement && node.classList.contains('embedded-document-preview')))
+        .filter((node) => !(node instanceof HTMLElement && node.classList.contains('embedded-document-inline')))
         .map((node) => node.textContent ?? '')
         .join('');
       event.stopImmediatePropagation();
