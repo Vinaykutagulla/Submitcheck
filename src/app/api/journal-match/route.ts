@@ -185,7 +185,7 @@ export async function POST(request: Request) {
     ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
     const judgeResult = await judgeJournalCandidates(
       body.manuscriptText,
-      judgeCandidates.slice(0, 12).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
+      judgeCandidates.slice(0, 20).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
     );
     const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
     const judgedRanked = rankedJournals.map((entry) => {
