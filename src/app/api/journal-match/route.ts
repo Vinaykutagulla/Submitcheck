@@ -154,6 +154,8 @@ export async function POST(request: Request) {
     });
     let rankedJournals = rankJournals(body.manuscriptText, filterResult.results, semanticProfile);
     let excludedForMissingData = filterResult.excludedForMissingData;
+    
+    console.log(`[MATCH DEBUG] Filtered: ${filterResult.results.length} | Ranked: ${rankedJournals.length} | Top score: ${rankedJournals[0]?.match.score ?? 'N/A'}`);
     if (maxBudget !== null) {
       const catalogMatches = rankedJournals.filter(({ journal }) => {
         return journal.apc !== null && journal.apc !== undefined && journal.apc <= maxBudget;
