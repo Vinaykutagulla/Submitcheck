@@ -294,13 +294,18 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const primaryDrugDeliveryMismatch = profile.topics.includes('drug delivery')
     && !matchingTopics.includes('drug delivery')
     && !/drug delivery|nanomedicine|nanoparticle|formulation|controlled release|sustained release|pharmaceutical technology/.test(journalSpecialtyText);
-  const fieldFit = journal.field === profile.field
-    ? 30
-    : journal.field === 'Multidisciplinary'
-      ? 12
-      : biomedicalProfile && biomedicalJournal && matchingTopics.length
-        ? specificTopicMatches.length ? 16 : 8
-        : crossDomainTopicFit && matchingTopics.length ? 14 : 0;
+  const hasDirectTopicEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0 || matchingMethods.length > 0;
+  const sameFieldWithoutDirectEvidence = journal.field === profile.field && !hasDirectTopicEvidence;
+  const multidisciplinaryWithoutDirectEvidence = journal.field === 'Multidisciplinary' && !hasDirectTopicEvidence;
+  const fieldFit = sameFieldWithoutDirectEvidence
+    ? 6
+    : journal.field === profile.field
+      ? 30
+      : journal.field === 'Multidisciplinary'
+        ? multidisciplinaryWithoutDirectEvidence ? 4 : 12
+        : biomedicalProfile && biomedicalJournal && matchingTopics.length
+          ? specificTopicMatches.length ? 16 : 8
+          : crossDomainTopicFit && matchingTopics.length ? 14 : 0;
   const scopeFit = specificTopicMatches.length
     ? Math.min(30, specificTopicMatches.length * 15)
     : fieldTopicMatches.length ? 5 : matchingTopics.length ? 8 : 0;
@@ -348,6 +353,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     score -= 3;
     warnings.push('Novelty statement not detected');
   }
+  if (!hasDirectTopicEvidence && (journal.field === profile.field || journal.field === 'Multidisciplinary')) {
+    score -= 20;
+    warnings.push('No direct journal-topic or keyword evidence; field-only overlap is not enough');
+  }
 
   if (nucleicAcidJournal && !profile.signals.hasNucleicAcidFocus) {
     score -= 50;
@@ -372,6 +381,14 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (primaryDrugDeliveryMismatch) {
     score -= 25;
     warnings.push('Journal does not show a direct drug-delivery or formulation scope match');
+  }
+  if (!specificTopicMatches.length && matchingTopics.length > 0) {
+    score -= 15;
+    warnings.push('Only broad topic overlap detected; manuscript-specific specialty match is missing');
+  }
+  if (!specificTopicMatches.length && !matchingKeywords.length && !matchingMethods.length) {
+    score -= 25;
+    warnings.push('No concrete topic, keyword, or method evidence remains after filtering');
   }
   if (!directEvidence) {
     score -= 20;
