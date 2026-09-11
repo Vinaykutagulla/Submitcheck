@@ -475,7 +475,12 @@ export default function Home() {
     return source.filter(({ journal }) => access === 'Any' || (access === 'OA / Free' ? journal.oa : !journal.oa));
   }, [remoteMatches, localMatches, access]);
   const noBudgetMatches = Boolean(text && budget > 0 && matches.length === 0);
-  const noFilteredMatches = Boolean(text && remoteMatches !== null && matches.length === 0 && !noBudgetMatches);
+  const hasSelectedFilters = field !== 'Any field'
+    || indexing !== 'Any indexing'
+    || quartile !== 'Any quartile'
+    || access !== 'Any';
+  const noFilteredMatches = Boolean(text && remoteMatches !== null && remoteMatches.length === 0 && hasSelectedFilters && !noBudgetMatches);
+  const noRelevantMatches = Boolean(text && remoteMatches !== null && remoteMatches.length === 0 && !hasSelectedFilters && !noBudgetMatches);
 
   const lookupJournal = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1021,6 +1026,7 @@ export default function Home() {
           {noBudgetMatches && <div className="empty">No strong, relevant journal with a verified INR APC satisfies the selected {formatBudget(budget)} budget and quartile. We are not showing weak or unrelated matches. Journals that report no APC are checked separately through DOAJ. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding no-APC alternatives...' : 'Find no-APC alternatives'}</button></div>}
           {lowApcJournals.length > 0 && <section ref={lowApcResultsRef} className="panel low-apc-results"><label className="panel-label">DOAJ-reported no-APC candidates <span className="hint">DOAJ reports no APC for these records. APC policies can change, so verify the publisher policy before submission.</span></label>{lowApcJournals.map((journal) => <div className="lookup-result" key={`${journal.title}-${journal.publisher}`}><div><strong>{journal.title}</strong><span>{journal.publisher} · {journal.subjects.slice(0, 2).join(', ') || 'Subject not listed'}</span></div><div className="lookup-actions">{journal.journalUrl && <a className="btn-small journal-link" href={journal.journalUrl} target="_blank" rel="noreferrer">↗ Website</a>}{journal.apcUrl && <a className="btn-small" href={journal.apcUrl} target="_blank" rel="noreferrer">APC policy</a>}{journal.instructionsUrl && <a className="btn-small" href={journal.instructionsUrl} target="_blank" rel="noreferrer">Instructions</a>}</div></div>)}</section>}
           {noFilteredMatches && <div className="empty">No journals match every selected filter. Try Any quartile, Any indexing, or a broader field. Some catalog journals are unranked and do not have verified APC data.</div>}
+          {noRelevantMatches && <div className="empty">No sufficiently relevant journals were found for this manuscript in the current catalog. Add a clearer title, abstract, or keywords, or use the journal lookup to verify a specific target.</div>}
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
         </>}
 
