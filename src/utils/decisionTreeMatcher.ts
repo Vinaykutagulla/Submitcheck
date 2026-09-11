@@ -119,7 +119,7 @@ const fieldSignals: Record<string, string[]> = {
   'Environmental Science': ['environmental', 'ecosystem', 'pollution', 'climate', 'water quality', 'wastewater', 'biodiversity'],
   'Earth and Planetary Sciences': ['geology', 'geological', 'seismic', 'tectonic', 'remote sensing', 'sediment', 'planetary'],
   'Materials Science': ['material', 'nanomaterial', 'composite', 'ceramic', 'alloy', 'thin film', 'characterization'],
-  Economics: ['econometric', 'economic', 'finance', 'market', 'regression', 'firm', 'income', 'trade'],
+  Economics: ['health economics', 'cost effectiveness', 'cost-effectiveness', 'pharmacoeconomics', 'budget impact', 'reimbursement', 'pricing', 'qaly', 'incremental cost', 'market access'],
   'Arts and Humanities': ['literature', 'history', 'culture', 'language', 'philosophy', 'heritage', 'discourse'],
 };
 
@@ -146,7 +146,7 @@ export const topicFamilies: Record<string, string[]> = {
   environmental: ['environmental', 'ecosystem', 'pollution', 'climate', 'water quality', 'wastewater', 'biodiversity'],
   'earth science': ['geology', 'geological', 'seismic', 'tectonic', 'remote sensing', 'sediment', 'planetary'],
   materials: ['material', 'nanomaterial', 'composite', 'ceramic', 'alloy', 'thin film', 'characterization'],
-  economics: ['econometric', 'economic', 'finance', 'market', 'regression', 'firm', 'income', 'trade'],
+  economics: ['econometric', 'health economics', 'cost-effectiveness', 'cost effectiveness', 'budget impact', 'market access', 'pharmacoeconomics', 'pricing', 'reimbursement', 'qaly', 'incremental cost', 'finance', 'market', 'regression', 'firm', 'income', 'trade'],
   'social research': ['survey', 'policy', 'social', 'behavior', 'interview', 'qualitative', 'participants'],
   humanities: ['literature', 'history', 'culture', 'language', 'philosophy', 'heritage', 'discourse'],
   'data science': ['dataset', 'algorithm', 'machine learning', 'regression', 'classifier', 'prediction'],
@@ -361,6 +361,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (nucleicAcidJournal && !profile.signals.hasNucleicAcidFocus) {
     score -= 50;
     warnings.push('Journal focuses on nucleic-acid research, but this manuscript does not');
+  }
+  if (matchingTopics.includes('economics') && profile.field !== 'Economics' && profile.field !== 'Social Sciences') {
+    score -= 35;
+    warnings.push('Economics overlap appears incidental rather than the manuscript\'s primary focus');
   }
   if (specialtyMismatch) {
     score -= 30;
