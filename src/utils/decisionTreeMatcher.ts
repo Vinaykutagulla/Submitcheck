@@ -280,6 +280,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory/.test(journalText);
   const biomedicalProfile = profile.topics.some((topic) => ['pharmacology', 'natural products', 'molecular pharmacology', 'analytical profiling'].includes(topic)) || profile.field === 'Life Sciences' || profile.field === 'Medicine';
+  const dominantTopicScore = profile.topics.reduce((acc, topic) => acc + (topicFamilies[topic]?.filter((term) => profileIdentityText.includes(term)).length ?? 0), 0);
   const crossDomainTopicFit = matchingTopics.length > 0 && !biomedicalProfile;
   const nonBiomedicalJournalMismatch = biomedicalProfile
     && !biomedicalJournal
@@ -294,6 +295,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const primaryDrugDeliveryMismatch = profile.topics.includes('drug delivery')
     && !matchingTopics.includes('drug delivery')
     && !/drug delivery|nanomedicine|nanoparticle|formulation|controlled release|sustained release|pharmaceutical technology/.test(journalSpecialtyText);
+  const incidentalNeighborPenalty = matchingTopics.length === 0 && profile.topics.length > 0 && dominantTopicScore <= 2 && (journal.field !== profile.field || journal.field === 'Multidisciplinary');
   const hasDirectTopicEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0 || matchingMethods.length > 0;
   const sameFieldWithoutDirectEvidence = journal.field === profile.field && !hasDirectTopicEvidence;
   const multidisciplinaryWithoutDirectEvidence = journal.field === 'Multidisciplinary' && !hasDirectTopicEvidence;
@@ -356,6 +358,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (!hasDirectTopicEvidence && (journal.field === profile.field || journal.field === 'Multidisciplinary')) {
     score -= 20;
     warnings.push('No direct journal-topic or keyword evidence; field-only overlap is not enough');
+  }
+  if (incidentalNeighborPenalty) {
+    score -= 25;
+    warnings.push('Journal only overlaps via a nearby field term and not the manuscript\'s dominant topic');
   }
 
   if (nucleicAcidJournal && !profile.signals.hasNucleicAcidFocus) {
