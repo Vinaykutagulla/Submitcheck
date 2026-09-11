@@ -126,7 +126,10 @@ export async function POST(request: Request) {
         speed: 'Check journal website',
         indexing: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : []),
         indexed: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : []),
-        scope: Array.isArray(row.subjects) && row.subjects.length ? row.subjects : (Array.isArray(row.scope) ? row.scope : []),
+        scope: [...new Set([
+          ...(Array.isArray(row.subjects) ? row.subjects : []),
+          ...(Array.isArray(row.scope) ? row.scope : []),
+        ])],
         asjcCodes: Array.isArray(row.asjc_codes) ? row.asjc_codes : [],
         sponsored: Boolean(row.sponsored),
         access: row.oa ? 'Open Access' as const : 'Subscription' as const,
