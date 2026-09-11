@@ -289,8 +289,11 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     || /nanoparticle|polymeric|sustained[- ]release|drug delivery|pharmaceutical|formulation|encapsulation/.test(profileIdentityText);
   const pharmaceuticalJournalField = /pharmaceutical|pharmacolog|pharmaceutic|toxicolog|medicinal|drug delivery|biomedical|chemistry/.test(journal.field.toLowerCase());
   const offDomainPharmaceuticalJournal = pharmaceuticalProfile
-    && /arts? and humanities|history|music|education|agricultur|agronom|crop science|animal science|environment|computer|engineering|social science|economics|finance|tourism|heritage|vaccine|immunolog/.test(journalSpecialtyText)
+    && /arts? and humanities|history|music|education|agricultur|agronom|crop science|animal science|environment|computer|engineering|social science|economics|finance|tourism|heritage|vaccine|immunolog|health policy|managed care/.test(journalSpecialtyText)
     && !pharmaceuticalJournalField;
+  const primaryDrugDeliveryMismatch = profile.topics.includes('drug delivery')
+    && !matchingTopics.includes('drug delivery')
+    && !/drug delivery|nanomedicine|nanoparticle|formulation|controlled release|sustained release|pharmaceutical technology/.test(journalSpecialtyText);
   const fieldFit = journal.field === profile.field
     ? 30
     : journal.field === 'Multidisciplinary'
@@ -365,6 +368,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (offDomainPharmaceuticalJournal) {
     score -= 40;
     warnings.push('Journal specialty is outside the manuscript\'s pharmaceutical formulation domain');
+  }
+  if (primaryDrugDeliveryMismatch) {
+    score -= 25;
+    warnings.push('Journal does not show a direct drug-delivery or formulation scope match');
   }
   if (!directEvidence) {
     score -= 20;
