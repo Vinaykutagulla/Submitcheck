@@ -12,6 +12,8 @@ export type SemanticProfile = {
   exclusions: string[];
 };
 
+export type SemanticProfileStatus = 'active' | 'missing_key' | 'auth_failed' | 'rate_limited' | 'provider_error';
+
 const emptyProfile: SemanticProfile = {
   researchQuestion: '',
   studyDesign: '',
@@ -43,8 +45,8 @@ function parseProfile(value: string): SemanticProfile | null {
   }
 }
 
-export async function createSemanticProfile(manuscriptText: string): Promise<SemanticProfile | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+export async function createSemanticProfile(manuscriptText: string): Promise<{ profile: SemanticProfile | null; status: SemanticProfileStatus }> {
+  if (!process.env.ANTHROPIC_API_KEY) return { profile: null, status: 'missing_key' };
 
   try {
     const completion = await anthropic.messages.create({
@@ -55,10 +57,17 @@ export async function createSemanticProfile(manuscriptText: string): Promise<Sem
       messages: [{ role: 'user', content: `Extract this JSON profile from the manuscript. Use empty strings or arrays when evidence is absent.\n\n{\n  "researchQuestion": "",\n  "studyDesign": "",\n  "subjectArea": [],\n  "populationOrMaterial": [],\n  "interventions": [],\n  "methods": [],\n  "outcomes": [],\n  "articleType": "",\n  "exclusions": []\n}\n\nManuscript:\n${manuscriptText.slice(0, 60000)}` }],
     });
     const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
-    return parseProfile(content);
+    const profile = parseProfile(content);
+    return profile ? { profile, status: 'active' } : { profile: null, status: 'provider_error' };
   } catch (error) {
-    console.error('Semantic manuscript profiling failed:', error instanceof Error ? error.message : error);
-    return null;
+    const statusCode = typeof error === 'object' && error && 'status' in error ? Number((error as { status?: unknown }).status) : 0;
+    const status = statusCode === 401 || statusCode === 403
+      ? 'auth_failed'
+      : statusCode === 429
+        ? 'rate_limited'
+        : 'provider_error';
+    console.error('Semantic manuscript profiling failed:', status);
+    return { profile: null, status };
   }
 }
 

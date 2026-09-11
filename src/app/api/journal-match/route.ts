@@ -36,7 +36,8 @@ export async function POST(request: Request) {
 
     const maxBudget = typeof body.budget === 'number' && Number.isFinite(body.budget) && body.budget > 0 ? body.budget : null;
     const manuscriptProfile = profileManuscript(body.manuscriptText);
-    const semanticProfile = await createSemanticProfile(body.manuscriptText);
+    const semanticResult = await createSemanticProfile(body.manuscriptText);
+    const semanticProfile = semanticResult.profile;
 
     const supabase = getAdminClient();
     if (!supabase) {
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
       source: 'supabase',
       matches,
       semanticProfileUsed: Boolean(semanticProfile),
+      semanticProfileStatus: semanticResult.status,
       fallbackUsed: strictMatches.length === 0 && matches.length > 0,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
