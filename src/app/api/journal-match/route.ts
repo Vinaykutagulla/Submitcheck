@@ -103,7 +103,6 @@ export async function POST(request: Request) {
     const broadQuery = await buildQuery(false);
     if (broadQuery.error) throw broadQuery.error;
     const candidateRows = [...(keywordQuery.data ?? []), ...(broadQuery.data ?? [])];
-    console.log(`[DEBUG] keywordQuery: ${keywordQuery.data?.length ?? 0} | broadQuery: ${broadQuery.data?.length ?? 0} | total: ${candidateRows.length}`);
     const rowsById = new Map<string, (typeof candidateRows)[number]>();
     for (const row of candidateRows) {
       rowsById.set(String(row.id), row);
@@ -127,10 +126,7 @@ export async function POST(request: Request) {
         speed: 'Check journal website',
         indexing: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : []),
         indexed: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : []),
-        scope: [...new Set([
-          ...(Array.isArray(row.subjects) ? row.subjects : []),
-          ...(Array.isArray(row.scope) ? row.scope : []),
-        ])],
+        scope: Array.isArray(row.subjects) && row.subjects.length ? row.subjects : (Array.isArray(row.scope) ? row.scope : []),
         asjcCodes: Array.isArray(row.asjc_codes) ? row.asjc_codes : [],
         sponsored: Boolean(row.sponsored),
         access: row.oa ? 'Open Access' as const : 'Subscription' as const,
@@ -154,7 +150,6 @@ export async function POST(request: Request) {
       access: body.access === 'Open Access' || body.access === 'Subscription' || body.access === 'Hybrid' ? body.access : undefined,
     });
     let rankedJournals = rankJournals(body.manuscriptText, filterResult.results, semanticProfile);
-    console.log(`[DEBUG] filterJournals: ${filterResult.results.length} passed | rankJournals: ${rankedJournals.length} scored | top score: ${rankedJournals[0]?.match.score}`);
     let excludedForMissingData = filterResult.excludedForMissingData;
     if (maxBudget !== null) {
       const catalogMatches = rankedJournals.filter(({ journal }) => {
@@ -181,13 +176,9 @@ export async function POST(request: Request) {
         .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
-    const judgeCandidates = [
-      ...rankedJournals.slice(0, 12),
-      ...rankedJournals.filter(({ match }) => match.reasons.some((reason) => /Specific topic overlap: (?:chromatography|pharmaceutical analysis|analytical quality by design)/i.test(reason))).slice(0, 8),
-    ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
     const judgeResult = await judgeJournalCandidates(
       body.manuscriptText,
-      judgeCandidates.slice(0, 20).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
+      rankedJournals.slice(0, 15).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
     );
     const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
     const judgedRanked = rankedJournals.map((entry) => {
@@ -209,16 +200,13 @@ export async function POST(request: Request) {
       };
     }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
     const aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
-    const deterministicMatches = rankedJournals
-      .filter(({ match }) => match.score >= 45
-        && Boolean(match.directEvidence)
-        && Boolean(match.topicalEvidence)
-        && !match.warnings.some((warning) => warning.includes('secondary topic')))
-      .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: 'deterministic-fallback' as const } }));
-    console.log(`[DEBUG] deterministicMatches filtered: ${deterministicMatches.length} from ${rankedJournals.length}`);
-    const matches = (aiAvailable
-      ? judgedRanked.filter(({ match, judgeScore, judgeExclusions }) => match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0)
-      : deterministicMatches)
+    const matches = judgedRanked
+      .filter(({ match, judgeScore, judgeExclusions }) => aiAvailable
+        ? match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0
+        : match.score >= 55
+          && Boolean(match.directEvidence)
+          && Boolean(match.topicalEvidence)
+          && !match.warnings.some((warning) => warning.includes('secondary topic')))
       .slice(0, 25)
       .map((entry) => ({
         ...entry,
