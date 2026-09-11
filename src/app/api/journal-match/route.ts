@@ -217,7 +217,7 @@ export async function POST(request: Request) {
     const minScore = isLongManuscript ? 20 : 45;
     const deterministicMatches = rankedJournals
       .filter(({ match }) => match.score >= minScore
-        && (isLongManuscript || Boolean(match.directEvidence))
+        && (isLongManuscript || (Boolean(match.directEvidence) && Boolean(match.topicalEvidence)))
         && (!isLongManuscript || !match.warnings.some((warning) => warning.includes('secondary topic'))))
       .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: isLongManuscript ? 'deterministic-catalog' as const : 'deterministic-fallback' as const } }));
     const matches = (aiAvailable
