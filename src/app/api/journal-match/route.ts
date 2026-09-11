@@ -203,13 +203,15 @@ export async function POST(request: Request) {
       };
     }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
     const aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
-    const matches = judgedRanked
-      .filter(({ match, judgeScore, judgeExclusions }) => aiAvailable
-        ? match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0
-        : match.score >= 45
-          && Boolean(match.directEvidence)
-          && Boolean(match.topicalEvidence)
-          && !match.warnings.some((warning) => warning.includes('secondary topic')))
+    const deterministicMatches = rankedJournals
+      .filter(({ match }) => match.score >= 45
+        && Boolean(match.directEvidence)
+        && Boolean(match.topicalEvidence)
+        && !match.warnings.some((warning) => warning.includes('secondary topic')))
+      .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: 'deterministic-fallback' as const } }));
+    const matches = (aiAvailable
+      ? judgedRanked.filter(({ match, judgeScore, judgeExclusions }) => match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0)
+      : deterministicMatches)
       .slice(0, 25)
       .map((entry) => ({
         ...entry,
