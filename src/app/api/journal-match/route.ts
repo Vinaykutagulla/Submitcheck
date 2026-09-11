@@ -179,9 +179,13 @@ export async function POST(request: Request) {
         .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
+    const judgeCandidates = [
+      ...rankedJournals.slice(0, 12),
+      ...rankedJournals.filter(({ match }) => match.reasons.some((reason) => /Specific topic overlap: (?:chromatography|pharmaceutical analysis|analytical quality by design)/i.test(reason))).slice(0, 8),
+    ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
     const judgeResult = await judgeJournalCandidates(
       body.manuscriptText,
-      rankedJournals.slice(0, 15).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
+      judgeCandidates.slice(0, 20).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
     );
     const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
     const judgedRanked = rankedJournals.map((entry) => {
