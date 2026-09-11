@@ -52,7 +52,18 @@ export async function POST(request: Request) {
     const prioritizedTopics = [...manuscriptProfile.topics]
       .sort((left, right) => (manuscriptProfile.topicScores[right] ?? 0) - (manuscriptProfile.topicScores[left] ?? 0));
     const topicTerms = prioritizedTopics.flatMap((topic) => topicFamilies[topic]?.slice(0, 3) ?? []);
-    const searchTerms = [...new Set([...prioritizedTopics, ...topicTerms, ...manuscriptProfile.keywords])]
+    const semanticTerms = semanticProfile
+      ? [
+        semanticProfile.researchQuestion,
+        semanticProfile.studyDesign,
+        ...semanticProfile.subjectArea,
+        ...semanticProfile.populationOrMaterial,
+        ...semanticProfile.interventions,
+        ...semanticProfile.methods,
+        ...semanticProfile.outcomes,
+      ]
+      : [];
+    const searchTerms = [...new Set([...prioritizedTopics, ...topicTerms, ...manuscriptProfile.keywords, ...semanticTerms])]
       .map((term) => term.replace(/[^a-z0-9 -]/gi, '').trim())
       .filter((term) => term.length >= 4)
       .filter((term) => !['compounds', 'compound', 'positive', 'that', 'using', 'based', 'molecular', 'dynamics', 'network', 'simulation', 'research', 'analysis'].includes(term))

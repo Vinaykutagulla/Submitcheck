@@ -312,11 +312,22 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const journalText = `${journal.name} ${journal.publisher ?? ''} ${journal.field} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
   const journalIdentityText = `${journal.name} ${journal.publisher ?? ''} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
   const journalFieldText = journal.field.toLowerCase();
+  const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const semanticText = semanticProfile ? [semanticProfile.researchQuestion, semanticProfile.studyDesign, ...semanticProfile.subjectArea, ...semanticProfile.populationOrMaterial, ...semanticProfile.interventions, ...semanticProfile.methods, ...semanticProfile.outcomes, semanticProfile.articleType].join(' ').toLowerCase() : '';
   const semanticJournalText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const semanticTokens = semanticText.match(/[a-z][a-z-]{4,}/g) ?? [];
   const semanticOverlap = semanticTokens.filter((token) => hasWholeWord(semanticJournalText, token)).length;
-  const semanticFit = semanticProfile ? Math.min(20, semanticOverlap * 2) : 0;
+  const semanticSubjectTerms = (semanticProfile ? [
+    ...semanticProfile.subjectArea,
+    ...semanticProfile.populationOrMaterial,
+    ...semanticProfile.interventions,
+    ...semanticProfile.outcomes,
+  ] : []).map((term) => term.toLowerCase()).filter((term) => term.length >= 4);
+  const semanticSubjectOverlap = semanticSubjectTerms.filter((term) => hasWholeWord(semanticJournalText, term)).length;
+  const semanticExclusionOverlap = semanticProfile
+    ? semanticProfile.exclusions.filter((term) => hasWholeWord(journalSpecialtyText, term.toLowerCase())).length
+    : 0;
+  const semanticFit = semanticProfile ? Math.min(24, semanticOverlap + semanticSubjectOverlap * 3) : 0;
   const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && !weakKeywordWords.has(keyword) && hasWordOrPlural(journalIdentityText, keyword));
   const matchingTopics = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalIdentityText.includes(term)));
   const fieldTopicMatches = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalFieldText.includes(term)));
@@ -328,7 +339,6 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const topicalEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0;
   const directEvidence = topicalEvidence || (matchingMethods.length > 0 && matchingTopics.length > 0);
   const profileIdentityText = `${profile.topics.join(' ')} ${profile.keywords.join(' ')}`;
-  const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory|obstetric|gynecolog|reproductive|pregnancy|childbirth|maternal|neonatal/.test(journalText);
   const biomedicalProfile = profile.topics.some((topic) => ['pharmacology', 'natural products', 'molecular pharmacology', 'analytical profiling'].includes(topic)) || profile.field === 'Life Sciences' || profile.field === 'Medicine';
   const crossDomainTopicFit = matchingTopics.length > 0 && !biomedicalProfile;
@@ -389,6 +399,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (matchingKeywords.length) reasons.push(`Keyword overlap: ${matchingKeywords.slice(0, 4).join(', ')}`);
   if (matchingMethods.length) reasons.push(`Method overlap: ${matchingMethods.slice(0, 3).join(', ')}`);
   if (semanticFit) reasons.push(`Semantic profile overlap: ${semanticOverlap} manuscript signals`);
+  if (semanticSubjectOverlap) reasons.push(`Semantic subject alignment: ${semanticSubjectOverlap} profile terms`);
   if (profile.articleType !== 'Unknown') reasons.push(`${profile.articleType} manuscript profile detected`);
   if (journal.requirements.wordLimit === null) warnings.push('Word limit not available from catalog');
   else if (requirementFit) reasons.push(`Within ${journal.requirements.wordLimit.toLocaleString()} word limit`);
@@ -442,6 +453,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (primaryDrugDeliveryMismatch) {
     score -= 25;
     warnings.push('Journal does not show a direct drug-delivery or formulation scope match');
+  }
+  if (semanticExclusionOverlap) {
+    score -= Math.min(35, semanticExclusionOverlap * 15);
+    warnings.push('Semantic profile excludes this journal specialty');
   }
   const evidenceWeight = specificTopicMatches.length * 2 + matchingKeywords.length + (matchingMethods.length > 0 && matchingTopics.length > 0 ? 1 : 0);
   if (evidenceWeight === 0) {
