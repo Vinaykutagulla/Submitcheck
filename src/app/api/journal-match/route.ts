@@ -218,7 +218,7 @@ export async function POST(request: Request) {
       .filter(({ match }) => match.score >= 45
         && Boolean(match.directEvidence)
         && Boolean(match.topicalEvidence)
-        && !match.warnings.some((warning) => warning.includes('secondary topic')))
+        && (!isLongManuscript || !match.warnings.some((warning) => warning.includes('secondary topic'))))
       .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: isLongManuscript ? 'deterministic-catalog' as const : 'deterministic-fallback' as const } }));
     const matches = (aiAvailable
       ? judgedRanked.filter((entry: any) => entry.match.score >= 55 && (entry.judgeScore ?? 0) >= 65 && Boolean(entry.match.directEvidence) && entry.judgeExclusions.length === 0)
