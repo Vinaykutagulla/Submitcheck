@@ -127,6 +127,10 @@ export const topicFamilies: Record<string, string[]> = {
   pharmaceutics: ['pharmaceut', 'drug delivery', 'formulation', 'dissolution', 'solid dispersion', 'dosage'],
   pharmacology: ['anti-inflammatory', 'inflammatory', 'cytotoxicity', 'cytotoxic', 'pharmacolog', 'therapeutic', 'akt inhibitor', 'raw 264.7'],
   'natural products': ['plant extract', 'phytochemical', 'phytoconstituent', 'flavonoid', 'coumarin', 'stilbene', 'terpenoid', 'phenol', 'medicinal plant', 'herbal'],
+  'oxidative stress': ['oxidative stress', 'reactive oxygen species', 'oxidative damage', 'lipid peroxidation', 'malondialdehyde', 'antioxidant', 'antioxidants', 'redox'],
+  'male infertility': ['male infertility', 'spermatozoa', 'sperm function', 'sperm quality', 'sperm dna fragmentation', 'semen', 'male reproductive', 'reproductive dysfunction'],
+  'reproductive medicine': ['reproductive medicine', 'andrology', 'infertility', 'fertility', 'semen analysis', 'sperm', 'reproductive tract'],
+  biomarkers: ['biomarker', 'biomarkers', 'diagnostic biomarker', 'diagnostic biomarkers', 'dna fragmentation assay'],
   'analytical profiling': ['lc-ms', 'lc-esi', 'qtof', 'hrms', 'metabolite profiling', 'mass spectrometry'],
   'molecular pharmacology': ['protein-ligand', 'molecular docking', 'molecular dynamics', 'binding affinity', 'admet', 'drug-likeness'],
   'drug delivery': ['drug delivery', 'nanomedicine', 'nanoparticle', 'release', 'formulation'],
@@ -259,7 +263,8 @@ export function profileManuscript(text: string): ManuscriptProfile {
       hasStructuredAbstract: /(?:background|objective|methods|results|conclusion)\s*:/i.test(text),
       hasNovelty: /novel|first|original|innovation|contribution/.test(lower),
       hasLimitations: /limitation|future work|further research|however/.test(lower),
-      hasNucleicAcidFocus: /\b(?:nucleic acid|rna|mrna|mirna|sirna|dna|crispr|oligonucleotide|transcriptom|gene expression)\b/i.test(frontMatter),
+      hasNucleicAcidFocus: /\b(?:nucleic acid|rna|mrna|mirna|sirna|crispr|oligonucleotide|transcriptom|gene expression)\b/i.test(frontMatter)
+        || (/\bdna\b/i.test(frontMatter) && /\b(?:gene expression|genomic|genome|sequenc|transcriptom|crispr|oligonucleotide)\b/i.test(frontMatter)),
     },
   };
 }
