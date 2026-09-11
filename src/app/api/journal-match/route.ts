@@ -179,33 +179,39 @@ export async function POST(request: Request) {
         .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
-    const judgeCandidates = [
-      ...rankedJournals.slice(0, 12),
-      ...rankedJournals.filter(({ match }) => match.reasons.some((reason) => /Specific topic overlap: (?:chromatography|pharmaceutical analysis|analytical quality by design)/i.test(reason))).slice(0, 8),
-    ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
-    const judgeResult = await judgeJournalCandidates(
-      body.manuscriptText,
-      judgeCandidates.slice(0, 12).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
-    );
-    const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
-    const judgedRanked = rankedJournals.map((entry) => {
-      const decision = judgeByName.get(entry.journal.name);
-      if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
-      const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
-      return {
-        ...entry,
-        judgeScore: decision.relevanceScore,
-        judgeReasons: decision.reasons,
-        judgeExclusions: decision.exclusions,
-        match: {
-          ...entry.match,
-          score: blendedScore,
-          matchSource: 'ai-semantic' as const,
-          reasons: [...entry.match.reasons, ...decision.reasons.map((reason) => `AI fit: ${reason}`)],
-          warnings: [...entry.match.warnings, ...decision.exclusions.map((reason) => `AI exclusion: ${reason}`)],
-        },
-      };
-    }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
+    const isLongManuscript = body.manuscriptText.length > 5000;
+    let judgeResult: any = { status: 'skipped', decisions: [] };
+    let judgedRanked = rankedJournals;
+    
+    if (!isLongManuscript) {
+      const judgeCandidates = [
+        ...rankedJournals.slice(0, 12),
+        ...rankedJournals.filter(({ match }) => match.reasons.some((reason) => /Specific topic overlap: (?:chromatography|pharmaceutical analysis|analytical quality by design)/i.test(reason))).slice(0, 8),
+      ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
+      judgeResult = await judgeJournalCandidates(
+        body.manuscriptText,
+        judgeCandidates.slice(0, 12).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
+      );
+      const judgeByName = new Map(judgeResult.decisions.map((decision: any) => [decision.name, decision]));
+      judgedRanked = rankedJournals.map((entry: any) => {
+        const decision = judgeByName.get(entry.journal.name);
+        if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
+        const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
+        return {
+          ...entry,
+          judgeScore: decision.relevanceScore,
+          judgeReasons: decision.reasons,
+          judgeExclusions: decision.exclusions,
+          match: {
+            ...entry.match,
+            score: blendedScore,
+            matchSource: 'ai-semantic' as const,
+            reasons: [...entry.match.reasons, ...decision.reasons.map((reason: any) => `AI fit: ${reason}`)],
+            warnings: [...entry.match.warnings, ...decision.exclusions.map((reason: any) => `AI exclusion: ${reason}`)],
+          },
+        };
+      }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
+    }
     const aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
     const deterministicMatches = rankedJournals
       .filter(({ match }) => match.score >= 45
@@ -214,7 +220,7 @@ export async function POST(request: Request) {
         && !match.warnings.some((warning) => warning.includes('secondary topic')))
       .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: 'deterministic-fallback' as const } }));
     const matches = (aiAvailable
-      ? judgedRanked.filter(({ match, judgeScore, judgeExclusions }) => match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0)
+      ? judgedRanked.filter((entry: any) => entry.match.score >= 55 && (entry.judgeScore ?? 0) >= 65 && Boolean(entry.match.directEvidence) && (entry.judgeExclusions?.length ?? 0) === 0)
       : deterministicMatches)
       .slice(0, 25)
       .map((entry) => ({
