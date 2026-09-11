@@ -179,57 +179,71 @@ export async function POST(request: Request) {
         .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
-    const judgeCandidates = [
-      ...rankedJournals.slice(0, 12),
-      ...rankedJournals.filter(({ match }) => match.reasons.some((reason) => /Specific topic overlap: (?:chromatography|pharmaceutical analysis|analytical quality by design)/i.test(reason))).slice(0, 8),
-    ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
-    const judgeResult = await judgeJournalCandidates(
-      body.manuscriptText,
-      judgeCandidates.slice(0, 12).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
-    );
-    const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
-    const judgedRanked = rankedJournals.map((entry) => {
-      const decision = judgeByName.get(entry.journal.name);
-      if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
-      const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
-      return {
-        ...entry,
-        judgeScore: decision.relevanceScore,
-        judgeReasons: decision.reasons,
-        judgeExclusions: decision.exclusions,
-        match: {
-          ...entry.match,
-          score: blendedScore,
-          matchSource: 'ai-semantic' as const,
-          reasons: [...entry.match.reasons, ...decision.reasons.map((reason) => `AI fit: ${reason}`)],
-          warnings: [...entry.match.warnings, ...decision.exclusions.map((reason) => `AI exclusion: ${reason}`)],
-        },
-      };
-    }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
-    const aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
+    const isLongManuscript = body.manuscriptText.length > 5000;
+    let judgeResult: { status: string; decisions: any[]; providerStatus?: number | null } = { status: 'skipped', decisions: [], providerStatus: null };
+    let judgedRanked = rankedJournals;
+    let aiAvailable = false;
+
+    if (!isLongManuscript) {
+      const judgeCandidates = [
+        ...rankedJournals.slice(0, 12),
+        ...rankedJournals.filter(({ match }) => match.reasons.some((reason) => /Specific topic overlap: (?:chromatography|pharmaceutical analysis|analytical quality by design)/i.test(reason))).slice(0, 8),
+      ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.journal.name === entry.journal.name) === index);
+      judgeResult = await judgeJournalCandidates(
+        body.manuscriptText,
+        judgeCandidates.slice(0, 12).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
+      );
+      const judgeByName = new Map(judgeResult.decisions.map((decision: any) => [decision.name, decision]));
+      judgedRanked = rankedJournals.map((entry: any) => {
+        const decision = judgeByName.get(entry.journal.name);
+        if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
+        const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
+        return {
+          ...entry,
+          judgeScore: decision.relevanceScore,
+          judgeReasons: decision.reasons,
+          judgeExclusions: decision.exclusions,
+          match: {
+            ...entry.match,
+            score: blendedScore,
+            matchSource: 'ai-semantic' as const,
+            reasons: [...entry.match.reasons, ...decision.reasons.map((reason: string) => `AI fit: ${reason}`)],
+            warnings: [...entry.match.warnings, ...decision.exclusions.map((reason: string) => `AI exclusion: ${reason}`)],
+          },
+        };
+      }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
+      aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
+    }
     const deterministicMatches = rankedJournals
       .filter(({ match }) => match.score >= 45
         && Boolean(match.directEvidence)
         && Boolean(match.topicalEvidence)
         && !match.warnings.some((warning) => warning.includes('secondary topic')))
-      .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: 'deterministic-fallback' as const } }));
+      .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: isLongManuscript ? 'deterministic-catalog' as const : 'deterministic-fallback' as const } }));
     const matches = (aiAvailable
-      ? judgedRanked.filter(({ match, judgeScore, judgeExclusions }) => match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0)
+      ? judgedRanked.filter((entry: any) => entry.match.score >= 55 && (entry.judgeScore ?? 0) >= 65 && Boolean(entry.match.directEvidence) && entry.judgeExclusions.length === 0)
       : deterministicMatches)
       .slice(0, 25)
-      .map((entry) => ({
+      .map((entry: any) => ({
         ...entry,
         match: { ...entry.match, matchSource: aiAvailable ? 'ai-semantic' as const : 'deterministic-fallback' as const },
       }));
     return NextResponse.json({
       source: 'supabase',
+      message: isLongManuscript
+        ? 'Deterministic catalog matches (AI review skipped for long manuscripts)'
+        : aiAvailable
+          ? 'AI-ranked journal matches'
+          : 'Strict catalog matches shown. AI review was unavailable for this manuscript, so weaker matches were excluded.',
       matches,
       semanticProfileUsed: Boolean(semanticProfile),
       semanticProfileStatus: semanticResult.status,
       semanticProfileProviderStatus: semanticResult.providerStatus,
       semanticJudgeStatus: judgeResult.status,
       semanticJudgeProviderStatus: judgeResult.providerStatus,
+      aiUsed: aiAvailable,
       fallbackUsed: !aiAvailable,
+      longManuscript: isLongManuscript,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
     });
