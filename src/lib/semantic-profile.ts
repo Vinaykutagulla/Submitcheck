@@ -40,6 +40,15 @@ function parseProfile(value: string): SemanticProfile | null {
   } catch { return null; }
 }
 
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  const cleaned = value.replace(/```json|```/gi, '').trim();
+  for (const candidate of [cleaned, cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1)]) {
+    if (!candidate || !candidate.startsWith('{') || !candidate.endsWith('}')) continue;
+    try { return JSON.parse(candidate) as Record<string, unknown>; } catch { /* try the next bounded candidate */ }
+  }
+  return null;
+}
+
 export async function createSemanticProfile(manuscriptText: string): Promise<{ profile: SemanticProfile | null; status: SemanticProfileStatus; providerStatus?: number }> {
   if (!process.env.ANTHROPIC_API_KEY) return { profile: null, status: 'missing_key' };
   try {
@@ -77,8 +86,8 @@ CANDIDATES:
 ${JSON.stringify(candidates)}` }],
     });
     const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
-    const parsed = JSON.parse(content.replace(/```json|```/gi, '').trim()) as { decisions?: unknown };
-    const decisions = Array.isArray(parsed.decisions) ? parsed.decisions.flatMap((item) => {
+    const parsed = parseJsonObject(content);
+    const decisions = Array.isArray(parsed?.decisions) ? parsed.decisions.flatMap((item) => {
       if (!item || typeof item !== 'object') return [];
       const value = item as Partial<JournalJudgeDecision>;
       if (typeof value.name !== 'string' || typeof value.relevanceScore !== 'number') return [];
@@ -88,7 +97,8 @@ ${JSON.stringify(candidates)}` }],
     return decisions.length ? { decisions, status: 'active' } : { decisions: [], status: 'provider_error' };
   } catch (error) {
     const result = providerStatus(error);
-    console.error('Journal semantic judging failed:', result.status);
+    const message = error instanceof Error ? error.message.slice(0, 120) : 'unknown provider error';
+    console.error('Journal semantic judging failed:', result.status, message);
     return { decisions: [], status: result.status, providerStatus: result.code };
   }
 }
