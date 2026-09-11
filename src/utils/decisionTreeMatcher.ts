@@ -85,6 +85,7 @@ export type ManuscriptProfile = {
   field: string;
   articleType: 'Review' | 'Research' | 'Methods' | 'Case study' | 'Unknown';
   topics: string[];
+  topicScores: Record<string, number>;
   keywords: string[];
   methods: string[];
   signals: {
@@ -178,6 +179,10 @@ function countWords(text: string) {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
+function countOccurrences(text: string, term: string) {
+  return text.split(term).length - 1;
+}
+
 function getAnalysisText(text: string) {
   return text.match(/^[\s\S]*?(?=\n\s*references?\b)/i)?.[0] ?? text;
 }
@@ -234,13 +239,18 @@ export function profileManuscript(text: string): ManuscriptProfile {
           : /methods|participants|sample size|experiment|we conducted/.test(lower)
           ? 'Research'
           : 'Unknown';
+  const topicScores = Object.fromEntries(Object.entries(topicFamilies).map(([topic, terms]) => [
+    topic,
+    terms.reduce((score, term) => score + Math.min(3, countOccurrences(frontMatter, term)), 0),
+  ]));
   let topics = Object.entries(topicFamilies)
-    .filter(([topic, terms]) => {
-      const hits = terms.filter((term) => frontMatter.includes(term)).length;
+    .filter(([topic]) => {
+      const hits = topicScores[topic] ?? 0;
       if (topic === 'engineering') return hits >= 2;
       if (['economics', 'environmental', 'social research', 'humanities', 'agriculture', 'public health'].includes(topic)) return hits >= 2;
       return hits >= 1;
     })
+    .sort(([left], [right]) => (topicScores[right] ?? 0) - (topicScores[left] ?? 0))
     .map(([topic]) => topic);
   const specificBiomedicalTopics = ['pharmacology', 'natural products', 'analytical profiling', 'molecular pharmacology'];
   if (specificBiomedicalTopics.some((topic) => topics.includes(topic))) {
@@ -254,6 +264,7 @@ export function profileManuscript(text: string): ManuscriptProfile {
     field,
     articleType,
     topics,
+    topicScores,
     keywords: extractKeywords(text),
     methods,
     signals: {
@@ -284,6 +295,9 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const matchingTopics = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalIdentityText.includes(term)));
   const fieldTopicMatches = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalFieldText.includes(term)));
   const specificTopicMatches = matchingTopics.filter((topic) => !broadTopicNames.has(topic));
+  const dominantTopic = profile.topics[0];
+  const dominantTopicScore = dominantTopic ? profile.topicScores[dominantTopic] ?? 0 : 0;
+  const dominantTopicMatched = Boolean(dominantTopic && matchingTopics.includes(dominantTopic));
   const matchingMethods = profile.methods.filter((method) => hasWholeWord(journalIdentityText, method));
   const topicalEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0;
   const directEvidence = topicalEvidence || (matchingMethods.length > 0 && matchingTopics.length > 0);
@@ -291,7 +305,6 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory/.test(journalText);
   const biomedicalProfile = profile.topics.some((topic) => ['pharmacology', 'natural products', 'molecular pharmacology', 'analytical profiling'].includes(topic)) || profile.field === 'Life Sciences' || profile.field === 'Medicine';
-  const dominantTopicScore = profile.topics.reduce((acc, topic) => acc + (topicFamilies[topic]?.filter((term) => profileIdentityText.includes(term)).length ?? 0), 0);
   const crossDomainTopicFit = matchingTopics.length > 0 && !biomedicalProfile;
   const nonBiomedicalJournalMismatch = biomedicalProfile
     && !biomedicalJournal
@@ -319,8 +332,9 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
         : biomedicalProfile && biomedicalJournal && matchingTopics.length
           ? specificTopicMatches.length ? 16 : 8
           : crossDomainTopicFit && matchingTopics.length ? 14 : 0;
-  const scopeFit = specificTopicMatches.length
-    ? Math.min(30, specificTopicMatches.length * 15)
+  const weightedTopicFit = specificTopicMatches.reduce((total, topic) => total + Math.min(3, profile.topicScores[topic] ?? 1), 0);
+  const scopeFit = weightedTopicFit
+    ? Math.min(36, weightedTopicFit * 12)
     : fieldTopicMatches.length ? 5 : matchingTopics.length ? 8 : 0;
   const keywordFit = Math.min(15, matchingKeywords.length * 5);
   const methodFit = Math.min(15, matchingMethods.length * 5);
@@ -369,6 +383,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   if (incidentalNeighborPenalty) {
     score -= 25;
     warnings.push('Journal only overlaps via a nearby field term and not the manuscript\'s dominant topic');
+  }
+  if (dominantTopicScore >= 2 && matchingTopics.length > 0 && !dominantTopicMatched) {
+    score -= 20;
+    warnings.push(`Journal matches a secondary topic, not the manuscript's dominant topic (${dominantTopic})`);
   }
 
   if (nucleicAcidJournal && !profile.signals.hasNucleicAcidFocus) {

@@ -49,8 +49,10 @@ export async function POST(request: Request) {
       ? 'journal_indexings!inner(indexing_name)'
       : 'journal_indexings(indexing_name)';
 
-    const topicTerms = manuscriptProfile.topics.flatMap((topic) => topicFamilies[topic]?.slice(0, 2) ?? []);
-    const searchTerms = [...new Set([...manuscriptProfile.topics, ...topicTerms, ...manuscriptProfile.keywords])]
+    const prioritizedTopics = [...manuscriptProfile.topics]
+      .sort((left, right) => (manuscriptProfile.topicScores[right] ?? 0) - (manuscriptProfile.topicScores[left] ?? 0));
+    const topicTerms = prioritizedTopics.flatMap((topic) => topicFamilies[topic]?.slice(0, 3) ?? []);
+    const searchTerms = [...new Set([...prioritizedTopics, ...topicTerms, ...manuscriptProfile.keywords])]
       .map((term) => term.replace(/[^a-z0-9 -]/gi, '').trim())
       .filter((term) => term.length >= 4)
       .filter((term) => !['compounds', 'compound', 'positive', 'that', 'using', 'based', 'molecular', 'dynamics', 'network', 'simulation', 'research', 'analysis'].includes(term))
