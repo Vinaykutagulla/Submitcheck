@@ -59,7 +59,7 @@ export async function createSemanticProfile(manuscriptText: string): Promise<{ p
 {"researchQuestion":"","studyDesign":"","subjectArea":[],"populationOrMaterial":[],"interventions":[],"methods":[],"outcomes":[],"articleType":"","exclusions":[]}
 
 Manuscript:
-${manuscriptText.slice(0, 60000)}` }],
+${manuscriptText.slice(0, 18000)}` }],
     });
     const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
     const profile = parseProfile(content);
@@ -80,7 +80,7 @@ export async function judgeJournalCandidates(manuscriptText: string, candidates:
       messages: [{ role: 'user', content: `Judge each candidate journal for this manuscript. A journal is relevant only when its scope genuinely publishes the subject and article type. AI, statistics, or HPLC are methods and must not replace the research subject. Return exactly {"decisions":[{"name":"exact name","relevanceScore":0,"reasons":["evidence"],"exclusions":["reason"]}]}. Do not invent scope details.
 
 MANUSCRIPT:
-${manuscriptText.slice(0, 45000)}
+${manuscriptText.slice(0, 24000)}
 
 CANDIDATES:
 ${JSON.stringify(candidates)}` }],
