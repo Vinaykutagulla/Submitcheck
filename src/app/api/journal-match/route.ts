@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { filterJournals, profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
 import { lookupLiveApc } from '@/lib/journal-apc';
 import { parseApcInr } from '@/lib/apc';
+import { createSemanticProfile } from '@/lib/semantic-profile';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
 
     const maxBudget = typeof body.budget === 'number' && Number.isFinite(body.budget) && body.budget > 0 ? body.budget : null;
     const manuscriptProfile = profileManuscript(body.manuscriptText);
+    const semanticProfile = await createSemanticProfile(body.manuscriptText);
 
     const supabase = getAdminClient();
     if (!supabase) {
@@ -133,7 +135,7 @@ export async function POST(request: Request) {
         : undefined,
       access: body.access === 'Open Access' || body.access === 'Subscription' || body.access === 'Hybrid' ? body.access : undefined,
     });
-    let rankedJournals = rankJournals(body.manuscriptText, filterResult.results);
+    let rankedJournals = rankJournals(body.manuscriptText, filterResult.results, semanticProfile);
     let excludedForMissingData = filterResult.excludedForMissingData;
     if (maxBudget !== null) {
       const catalogMatches = rankedJournals.filter(({ journal }) => {
@@ -172,6 +174,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       source: 'supabase',
       matches,
+      semanticProfileUsed: Boolean(semanticProfile),
       fallbackUsed: strictMatches.length === 0 && matches.length > 0,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),

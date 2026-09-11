@@ -23,6 +23,8 @@ export type MatchJournal = {
   };
 };
 
+import type { SemanticProfile } from '@/lib/semantic-profile';
+
 export type IndexingSource = 'Scopus' | 'Web of Science' | 'DOAJ' | 'PubMed' | 'UGC-CARE' | string;
 export type Quartile = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 export type AccessType = 'Open Access' | 'Subscription' | 'Hybrid';
@@ -256,12 +258,17 @@ export function profileManuscript(text: string): ManuscriptProfile {
   };
 }
 
-export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal): JournalMatchResult {
+export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, semanticProfile?: SemanticProfile | null): JournalMatchResult {
   const reasons: string[] = [];
   const warnings: string[] = [];
   const journalText = `${journal.name} ${journal.publisher ?? ''} ${journal.field} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
   const journalIdentityText = `${journal.name} ${journal.publisher ?? ''} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
   const journalFieldText = journal.field.toLowerCase();
+  const semanticText = semanticProfile ? [semanticProfile.researchQuestion, semanticProfile.studyDesign, ...semanticProfile.subjectArea, ...semanticProfile.populationOrMaterial, ...semanticProfile.interventions, ...semanticProfile.methods, ...semanticProfile.outcomes, semanticProfile.articleType].join(' ').toLowerCase() : '';
+  const semanticJournalText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
+  const semanticTokens = semanticText.match(/[a-z][a-z-]{4,}/g) ?? [];
+  const semanticOverlap = semanticTokens.filter((token) => hasWholeWord(semanticJournalText, token)).length;
+  const semanticFit = semanticProfile ? Math.min(20, semanticOverlap * 2) : 0;
   const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && hasWordOrPlural(journalIdentityText, keyword));
   const matchingTopics = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalIdentityText.includes(term)));
   const fieldTopicMatches = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalFieldText.includes(term)));
@@ -308,6 +315,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal):
   const articleFit = profile.articleType === 'Unknown' ? 8 : journal.name.toLowerCase().includes(profile.articleType.toLowerCase()) ? 15 : 10;
   const requirementFit = journal.requirements.wordLimit === null ? 0 : profile.words <= journal.requirements.wordLimit ? 10 : 0;
   let score = fieldFit + scopeFit + keywordFit + methodFit + articleFit + requirementFit + biomedicalFit + interdisciplinaryFit;
+  score += semanticFit;
 
   if (fieldFit >= 30) reasons.push(`Strong ${profile.field} field alignment`);
   else if (fieldFit === 12) reasons.push('Broad multidisciplinary scope can accommodate this field');
@@ -319,6 +327,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal):
   else warnings.push('No strong topic or scope overlap detected');
   if (matchingKeywords.length) reasons.push(`Keyword overlap: ${matchingKeywords.slice(0, 4).join(', ')}`);
   if (matchingMethods.length) reasons.push(`Method overlap: ${matchingMethods.slice(0, 3).join(', ')}`);
+  if (semanticFit) reasons.push(`Semantic profile overlap: ${semanticOverlap} manuscript signals`);
   if (profile.articleType !== 'Unknown') reasons.push(`${profile.articleType} manuscript profile detected`);
   if (journal.requirements.wordLimit === null) warnings.push('Word limit not available from catalog');
   else if (requirementFit) reasons.push(`Within ${journal.requirements.wordLimit.toLocaleString()} word limit`);
@@ -370,10 +379,10 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal):
   return { score, confidence, directEvidence, topicalEvidence, reasons, warnings };
 }
 
-export function rankJournals<T extends MatchJournal>(text: string, journals: T[]) {
+export function rankJournals<T extends MatchJournal>(text: string, journals: T[], semanticProfile?: SemanticProfile | null) {
   const profile = profileManuscript(text);
   return journals
-    .map((journal) => ({ journal, profile, match: scoreJournal(profile, journal) }))
+    .map((journal) => ({ journal, profile, match: scoreJournal(profile, journal, semanticProfile) }))
     .sort((a, b) => b.match.score - a.match.score || a.journal.name.localeCompare(b.journal.name));
 }
 
