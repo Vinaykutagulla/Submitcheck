@@ -215,7 +215,7 @@ export function profileManuscript(text: string): ManuscriptProfile {
   const fieldScores = Object.entries(fieldSignals).map(([field, terms]) => ({
     field,
     score: terms.filter((term) => lower.includes(term)).length,
-  })).sort((a, b) => b.score - a.score);
+  })).filter((item) => item.score >= 2).sort((a, b) => b.score - a.score);
   const field = fieldScores[0]?.score ? fieldScores[0].field : 'Multidisciplinary';
   const hasExperimentalResearch = /experimental validation|in[- ]vitro|in[- ]vivo|cytotoxicity|cell line|molecular docking|lc[- ](?:esi[- ])?qtof|mass spectrometry|we investigated|we evaluated/.test(lower);
   const articleType = hasExperimentalResearch
@@ -230,7 +230,12 @@ export function profileManuscript(text: string): ManuscriptProfile {
           ? 'Research'
           : 'Unknown';
   let topics = Object.entries(topicFamilies)
-    .filter(([topic, terms]) => terms.filter((term) => frontMatter.includes(term)).length >= (topic === 'engineering' ? 2 : 1))
+    .filter(([topic, terms]) => {
+      const hits = terms.filter((term) => frontMatter.includes(term)).length;
+      if (topic === 'engineering') return hits >= 2;
+      if (['economics', 'environmental', 'social research', 'humanities', 'agriculture', 'public health'].includes(topic)) return hits >= 2;
+      return hits >= 1;
+    })
     .map(([topic]) => topic);
   const specificBiomedicalTopics = ['pharmacology', 'natural products', 'analytical profiling', 'molecular pharmacology'];
   if (specificBiomedicalTopics.some((topic) => topics.includes(topic))) {
