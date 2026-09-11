@@ -230,19 +230,6 @@ export async function POST(request: Request) {
       semanticJudgeStatus: judgeResult.status,
       semanticJudgeProviderStatus: judgeResult.providerStatus,
       fallbackUsed: !aiAvailable,
-      diagnostics: {
-        catalogRows: journals.length,
-        filteredRows: filterResult.results.length,
-        rankedRows: rankedJournals.length,
-        deterministicRows: deterministicMatches.length,
-        topRanked: rankedJournals.slice(0, 5).map(({ journal, match }) => ({
-          name: journal.name,
-          score: match.score,
-          directEvidence: match.directEvidence,
-          topicalEvidence: match.topicalEvidence,
-          secondaryTopic: match.warnings.some((warning) => warning.includes('secondary topic')),
-        })),
-      },
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
     });
