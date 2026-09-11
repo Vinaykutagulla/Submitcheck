@@ -75,12 +75,12 @@ export async function judgeJournalCandidates(manuscriptText: string, candidates:
   if (!process.env.ANTHROPIC_API_KEY || candidates.length === 0) return { decisions: [], status: process.env.ANTHROPIC_API_KEY ? 'provider_error' : 'missing_key' };
   try {
     const completion = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 1400, temperature: 0,
+      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 900, temperature: 0,
       system: 'You are a strict academic journal-fit judge. Judge topical scope fit, not prestige or generic field overlap. Return JSON only.',
       messages: [{ role: 'user', content: `Judge each candidate journal for this manuscript. A journal is relevant only when its scope genuinely publishes the subject and article type. AI, statistics, or HPLC are methods and must not replace the research subject. Return exactly {"decisions":[{"name":"exact name","relevanceScore":0,"reasons":["evidence"],"exclusions":["reason"]}]}. Do not invent scope details.
 
 MANUSCRIPT:
-${manuscriptText.slice(0, 10000)}
+${manuscriptText.slice(0, 6000)}
 
 CANDIDATES:
 ${JSON.stringify(candidates)}` }],
