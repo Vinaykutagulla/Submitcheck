@@ -226,6 +226,12 @@ export async function POST(request: Request) {
       semanticJudgeStatus: judgeResult.status,
       semanticJudgeProviderStatus: judgeResult.providerStatus,
       fallbackUsed: !aiAvailable,
+      diagnostics: {
+        catalogRows: journals.length,
+        filteredRows: filterResult.results.length,
+        rankedRows: rankedJournals.length,
+        deterministicRows: deterministicMatches.length,
+      },
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
     });
