@@ -471,7 +471,7 @@ export default function Home() {
     .filter((journal) => matchesQuartile(journal.quartile, quartile)))
     .map(({ journal, match }) => ({ journal, match, gaps: getGaps(text, journal) })), [text, field, quartile, budget]);
   const matches = useMemo(() => {
-    const source = remoteMatches ?? localMatches;
+    const source = remoteMatches ?? (localProPreview ? localMatches : []);
     return source.filter(({ journal }) => access === 'Any' || (access === 'OA / Free' ? journal.oa : !journal.oa));
   }, [remoteMatches, localMatches, access]);
   const noBudgetMatches = Boolean(text && budget > 0 && matches.length === 0);
@@ -677,10 +677,12 @@ export default function Home() {
           setSaveMessage('Showing the closest journal shortlist. Add an abstract and keywords for more precise matches.');
         }
       } else {
-        setRemoteMatches(null);
+        setRemoteMatches([]);
+        setSaveMessage('Unable to retrieve the journal catalog. Please try matching again.');
       }
     } catch {
-      setRemoteMatches(null);
+      setRemoteMatches([]);
+      setSaveMessage('Unable to retrieve the journal catalog. Please try matching again.');
     } finally {
       setMatching(false);
     }
