@@ -235,7 +235,7 @@ export function profileManuscript(text: string): ManuscriptProfile {
     field,
     score: terms.filter((term) => lower.includes(term)).length,
   })).filter((item) => item.score >= 2).sort((a, b) => b.score - a.score);
-  const analyticalField = /\b(?:hplc|high-performance liquid chromatography|chromatograph|pharmaceutical analysis|retention time)\b/i.test(frontMatter)
+  const analyticalField = /\b(?:hplc|high-performance liquid chromatography|chromatograph\w*|pharmaceutical analysis|retention time)\b/i.test(frontMatter)
     ? 'Analytical Chemistry'
     : null;
   const field = analyticalField ?? (fieldScores[0]?.score ? fieldScores[0].field : 'Multidisciplinary');
@@ -284,7 +284,7 @@ export function profileManuscript(text: string): ManuscriptProfile {
     });
   }
   const methods = ['lc-ms', 'mass spectrometry', 'molecular docking', 'molecular dynamics', 'admet', 'survey', 'interview', 'randomized', 'in vitro', 'in vivo', 'regression', 'qualitative', 'systematic review']
-    .filter((method) => lower.includes(method));
+    .filter((method) => frontMatter.includes(method));
 
   return {
     words: countWords(analysisText),
