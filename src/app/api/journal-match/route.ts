@@ -194,7 +194,7 @@ export async function POST(request: Request) {
       );
       const judgeByName = new Map(judgeResult.decisions.map((decision: JournalJudgeDecision) => [decision.name, decision]));
       judgedRanked = rankedJournals.map((entry: any) => {
-        const decision = judgeByName.get(entry.journal.name);
+        const decision = judgeByName.get(entry.journal.name) as JournalJudgeDecision | undefined;
         if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
         const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
         return {
