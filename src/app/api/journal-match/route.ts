@@ -177,6 +177,7 @@ export async function POST(request: Request) {
       matches,
       semanticProfileUsed: Boolean(semanticProfile),
       semanticProfileStatus: semanticResult.status,
+      semanticProfileProviderStatus: semanticResult.providerStatus,
       fallbackUsed: strictMatches.length === 0 && matches.length > 0,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),

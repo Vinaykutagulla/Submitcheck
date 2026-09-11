@@ -45,7 +45,7 @@ function parseProfile(value: string): SemanticProfile | null {
   }
 }
 
-export async function createSemanticProfile(manuscriptText: string): Promise<{ profile: SemanticProfile | null; status: SemanticProfileStatus }> {
+export async function createSemanticProfile(manuscriptText: string): Promise<{ profile: SemanticProfile | null; status: SemanticProfileStatus; providerStatus?: number }> {
   if (!process.env.ANTHROPIC_API_KEY) return { profile: null, status: 'missing_key' };
 
   try {
@@ -67,7 +67,7 @@ export async function createSemanticProfile(manuscriptText: string): Promise<{ p
         ? 'rate_limited'
         : 'provider_error';
     console.error('Semantic manuscript profiling failed:', status);
-    return { profile: null, status };
+    return { profile: null, status, providerStatus: statusCode || undefined };
   }
 }
 
