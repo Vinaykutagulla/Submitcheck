@@ -111,6 +111,7 @@ export type JournalMatchResult = {
 const fieldSignals: Record<string, string[]> = {
   'Life Sciences': ['drug', 'pharmaceut', 'clinical', 'cell', 'protein', 'nanomedicine', 'formulation', 'biology', 'patient'],
   Chemistry: ['chemistry', 'synthesis', 'molecule', 'reaction', 'catalyst', 'polymer', 'spectroscopy', 'chemical'],
+  'Analytical Chemistry': ['chromatography', 'hplc', 'analytical method', 'retention time', 'method validation', 'pharmaceutical analysis'],
   Engineering: ['engineering', 'prototype', 'mechanical', 'device', 'structural design', 'control system', 'robotics'],
   'Computer Science': ['algorithm', 'machine learning', 'software', 'dataset', 'neural network', 'computer', 'model'],
   Physics: ['physics', 'quantum', 'particle', 'material', 'energy', 'optical', 'magnetic'],
@@ -136,6 +137,9 @@ export const topicFamilies: Record<string, string[]> = {
   'clinical audit': ['clinical audit', 'obstetric audit', 'audit of', 'quality improvement', 'institutional audit', 'hospital audit'],
   'Robson classification': ['robson classification', 'robson ten-group', 'robson ten group', 'robson tgcs', 'ten-group classification', 'ten group classification'],
   'maternal and neonatal health': ['maternal health', 'maternal morbidity', 'maternal mortality', 'neonatal outcome', 'neonatal morbidity', 'nicu admission', 'breastfeeding initiation'],
+  chromatography: ['hplc', 'high-performance liquid chromatography', 'chromatograph', 'retention time', 'stationary phase', 'mobile phase', 'gradient optimization', 'chromatographic method'],
+  'pharmaceutical analysis': ['pharmaceutical analysis', 'analytical method development', 'method development', 'quality control', 'regulatory compliance', 'method validation'],
+  'AI analytical chemistry': ['artificial intelligence', 'machine learning', 'deep learning', 'reinforcement learning', 'explainable ai', 'chemometrics', 'digital twins', 'federated learning'],
   'analytical profiling': ['lc-ms', 'lc-esi', 'qtof', 'hrms', 'metabolite profiling', 'mass spectrometry'],
   'molecular pharmacology': ['protein-ligand', 'molecular docking', 'molecular dynamics', 'binding affinity', 'admet', 'drug-likeness'],
   'drug delivery': ['drug delivery', 'nanomedicine', 'nanoparticle', 'release', 'formulation'],
@@ -230,15 +234,21 @@ export function profileManuscript(text: string): ManuscriptProfile {
     field,
     score: terms.filter((term) => lower.includes(term)).length,
   })).filter((item) => item.score >= 2).sort((a, b) => b.score - a.score);
-  const field = fieldScores[0]?.score ? fieldScores[0].field : 'Multidisciplinary';
-  const hasExperimentalResearch = /experimental validation|in[- ]vitro|in[- ]vivo|cytotoxicity|cell line|molecular docking|lc[- ](?:esi[- ])?qtof|mass spectrometry|we investigated|we evaluated/.test(lower);
-  const articleType = hasExperimentalResearch
+  const analyticalField = /\b(?:hplc|high-performance liquid chromatography|chromatograph|pharmaceutical analysis|retention time)\b/i.test(frontMatter)
+    ? 'Analytical Chemistry'
+    : null;
+  const field = analyticalField ?? (fieldScores[0]?.score ? fieldScores[0].field : 'Multidisciplinary');
+  const hasExperimentalResearch = /experimental validation|in[- ]vitro|in[- ]vivo|cytotoxicity|cell line|molecular docking|lc[- ](?:esi[- ])?qtof|mass spectrometry|we investigated|we evaluated/.test(frontMatter);
+  const hasReviewEvidence = /\breview\b|systematic review|meta-analysis|literature search|current advances|future perspectives/i.test(frontMatter);
+  const articleType = hasReviewEvidence && !/experimental validation|in[- ]vitro|in[- ]vivo|cell line|randomized controlled trial/i.test(frontMatter)
+    ? 'Review'
+    : hasExperimentalResearch
     ? 'Research'
     : /case report|case study|single patient/.test(lower)
       ? 'Case study'
         : /(?:^|\n)\s*(?:protocol|benchmark|dataset|software package)\b|\b(?:protocol study|methods paper|benchmark study|dataset paper)\b/.test(lower)
         ? 'Methods'
-        : /review|systematic review|meta-analysis|literature search/.test(lower)
+        : /review|systematic review|meta-analysis|literature search|current advances|future perspectives/.test(lower)
           ? 'Review'
           : /participants|sample size|experiment|we conducted|retrospective|cross-sectional|clinical audit/.test(lower)
           ? 'Research'
@@ -259,6 +269,18 @@ export function profileManuscript(text: string): ManuscriptProfile {
   const specificBiomedicalTopics = ['pharmacology', 'natural products', 'analytical profiling', 'molecular pharmacology'];
   if (specificBiomedicalTopics.some((topic) => topics.includes(topic))) {
     topics = topics.filter((topic) => !['chemistry', 'synthesis', 'medicine'].includes(topic));
+  }
+  const specificAnalyticalTopics = ['chromatography', 'pharmaceutical analysis', 'AI analytical chemistry'];
+  if (specificAnalyticalTopics.some((topic) => topics.includes(topic))) {
+    topics = topics.filter((topic) => !['data science', 'machine learning', 'pharmaceutics'].includes(topic));
+  }
+  if (topics.some((topic) => ['chromatography', 'pharmaceutical analysis'].includes(topic))) {
+    const analyticalPriority = ['chromatography', 'pharmaceutical analysis', 'AI analytical chemistry'];
+    topics.sort((left, right) => {
+      const leftPriority = analyticalPriority.indexOf(left);
+      const rightPriority = analyticalPriority.indexOf(right);
+      return (leftPriority < 0 ? analyticalPriority.length : leftPriority) - (rightPriority < 0 ? analyticalPriority.length : rightPriority);
+    });
   }
   const methods = ['lc-ms', 'mass spectrometry', 'molecular docking', 'molecular dynamics', 'admet', 'survey', 'interview', 'randomized', 'in vitro', 'in vivo', 'regression', 'qualitative', 'systematic review']
     .filter((method) => lower.includes(method));
