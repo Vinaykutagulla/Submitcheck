@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { filterJournals, profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
 import { lookupLiveApc } from '@/lib/journal-apc';
 import { parseApcInr } from '@/lib/apc';
-import { createSemanticProfile, judgeJournalCandidates } from '@/lib/semantic-profile';
+import { createSemanticProfile, judgeJournalCandidates, type JournalJudgeDecision } from '@/lib/semantic-profile';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
         body.manuscriptText,
         judgeCandidates.slice(0, 12).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
       );
-      const judgeByName = new Map(judgeResult.decisions.map((decision: any) => [decision.name, decision]));
+      const judgeByName = new Map(judgeResult.decisions.map((decision: JournalJudgeDecision) => [decision.name, decision]));
       judgedRanked = rankedJournals.map((entry: any) => {
         const decision = judgeByName.get(entry.journal.name);
         if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
@@ -206,8 +206,8 @@ export async function POST(request: Request) {
             ...entry.match,
             score: blendedScore,
             matchSource: 'ai-semantic' as const,
-            reasons: [...entry.match.reasons, ...decision.reasons.map((reason: any) => `AI fit: ${reason}`)],
-            warnings: [...entry.match.warnings, ...decision.exclusions.map((reason: any) => `AI exclusion: ${reason}`)],
+            reasons: [...entry.match.reasons, ...decision.reasons.map((reason: string) => `AI fit: ${reason}`)],
+            warnings: [...entry.match.warnings, ...decision.exclusions.map((reason: string) => `AI exclusion: ${reason}`)],
           },
         };
       }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
