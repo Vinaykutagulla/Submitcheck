@@ -203,7 +203,7 @@ export async function POST(request: Request) {
     const matches = judgedRanked
       .filter(({ match, judgeScore, judgeExclusions }) => aiAvailable
         ? match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0
-        : match.score >= 55
+        : match.score >= 45
           && Boolean(match.directEvidence)
           && Boolean(match.topicalEvidence)
           && !match.warnings.some((warning) => warning.includes('secondary topic')))
