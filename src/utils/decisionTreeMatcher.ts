@@ -112,7 +112,7 @@ export type JournalMatchResult = {
 const fieldSignals: Record<string, string[]> = {
   'Life Sciences': ['drug', 'pharmaceut', 'clinical', 'cell', 'protein', 'nanomedicine', 'formulation', 'biology', 'patient'],
   Chemistry: ['chemistry', 'synthesis', 'molecule', 'reaction', 'catalyst', 'polymer', 'spectroscopy', 'chemical'],
-  'Analytical Chemistry': ['chromatography', 'hplc', 'analytical method', 'retention time', 'method validation', 'pharmaceutical analysis'],
+  'Analytical Chemistry': ['chromatography', 'hplc', 'analytical method', 'retention time', 'method validation', 'pharmaceutical analysis', 'quality by design', 'design of experiments'],
   Engineering: ['engineering', 'prototype', 'mechanical', 'device', 'structural design', 'control system', 'robotics'],
   'Computer Science': ['algorithm', 'machine learning', 'software', 'dataset', 'neural network', 'computer', 'model'],
   Physics: ['physics', 'quantum', 'particle', 'material', 'energy', 'optical', 'magnetic'],
@@ -141,6 +141,7 @@ export const topicFamilies: Record<string, string[]> = {
   chromatography: ['hplc', 'high-performance liquid chromatography', 'chromatograph', 'retention time', 'stationary phase', 'mobile phase', 'gradient optimization', 'chromatographic method'],
   'pharmaceutical analysis': ['pharmaceutical analysis', 'analytical method development', 'method development', 'quality control', 'regulatory compliance', 'method validation'],
   'AI analytical chemistry': ['artificial intelligence', 'machine learning', 'deep learning', 'reinforcement learning', 'explainable ai', 'chemometrics', 'digital twins', 'federated learning'],
+  'analytical quality by design': ['analytical quality by design', 'aqbd', 'ich q14', 'analytical target profile', 'method operable design region', 'method operable design', 'design space', 'quality by design'],
   'analytical profiling': ['lc-ms', 'lc-esi', 'qtof', 'hrms', 'metabolite profiling', 'mass spectrometry'],
   'molecular pharmacology': ['protein-ligand', 'molecular docking', 'molecular dynamics', 'binding affinity', 'admet', 'drug-likeness'],
   'drug delivery': ['drug delivery', 'nanomedicine', 'nanoparticle', 'release', 'formulation'],
@@ -235,7 +236,7 @@ export function profileManuscript(text: string): ManuscriptProfile {
     field,
     score: terms.filter((term) => lower.includes(term)).length,
   })).filter((item) => item.score >= 2).sort((a, b) => b.score - a.score);
-  const analyticalField = /\b(?:hplc|high-performance liquid chromatography|chromatograph\w*|pharmaceutical analysis|retention time)\b/i.test(frontMatter)
+  const analyticalField = /\b(?:hplc|high-performance liquid chromatography|chromatograph\w*|pharmaceutical analysis|retention time|aqbd|quality by design|ich q14)\b/i.test(frontMatter)
     ? 'Analytical Chemistry'
     : null;
   const field = analyticalField ?? (fieldScores[0]?.score ? fieldScores[0].field : 'Multidisciplinary');
@@ -271,12 +272,12 @@ export function profileManuscript(text: string): ManuscriptProfile {
   if (specificBiomedicalTopics.some((topic) => topics.includes(topic))) {
     topics = topics.filter((topic) => !['chemistry', 'synthesis', 'medicine'].includes(topic));
   }
-  const specificAnalyticalTopics = ['chromatography', 'pharmaceutical analysis', 'AI analytical chemistry'];
+  const specificAnalyticalTopics = ['chromatography', 'pharmaceutical analysis', 'AI analytical chemistry', 'analytical quality by design'];
   if (specificAnalyticalTopics.some((topic) => topics.includes(topic))) {
     topics = topics.filter((topic) => !['data science', 'machine learning', 'pharmaceutics'].includes(topic));
   }
   if (topics.some((topic) => ['chromatography', 'pharmaceutical analysis'].includes(topic))) {
-    const analyticalPriority = ['chromatography', 'pharmaceutical analysis', 'AI analytical chemistry'];
+    const analyticalPriority = ['chromatography', 'pharmaceutical analysis', 'analytical quality by design', 'AI analytical chemistry'];
     topics.sort((left, right) => {
       const leftPriority = analyticalPriority.indexOf(left);
       const rightPriority = analyticalPriority.indexOf(right);
