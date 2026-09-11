@@ -214,8 +214,9 @@ export async function POST(request: Request) {
       }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
       aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
     }
+    const minScore = isLongManuscript ? 35 : 45;
     const deterministicMatches = rankedJournals
-      .filter(({ match }) => match.score >= 45
+      .filter(({ match }) => match.score >= minScore
         && Boolean(match.directEvidence)
         && Boolean(match.topicalEvidence)
         && (!isLongManuscript || !match.warnings.some((warning) => warning.includes('secondary topic'))))
