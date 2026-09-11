@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from('journals')
       .select('id,source_record_id,name,issn,eissn,publisher,field,subjects,quartile,oa,apc_display,indexed,submission_url,journal_indexings(indexing_name)')
-      .or(`name.ilike.%${safeQuery}%,publisher.ilike.%${safeQuery}%,issn.ilike.%${safeQuery}%,eissn.ilike.%${safeQuery}%`)
+      .or(`name.ilike.%${safeQuery}%,publisher.ilike.%${safeQuery}%,issn.ilike.%${safeQuery}%,eissn.ilike.%${safeQuery}%,search_document.ilike.%${safeQuery}%`)
       .order('name')
       .limit(10);
 
