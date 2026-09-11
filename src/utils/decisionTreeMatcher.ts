@@ -157,6 +157,7 @@ const broadTopicNames = new Set(['pharmacology', 'medicine', 'chemistry', 'synth
 
 const stopWords = new Set('about after again against also among because before being between both could does during each from further have having into itself more most other over same should some such than their there these they this those through under very what when where which while with would your'.split(' '));
 const genericMatchWords = new Set(['molecular', 'dynamics', 'simulation', 'model', 'modeling', 'network', 'computational', 'study', 'research', 'analysis', 'method', 'methods', 'results', 'abstract', 'in-vitro', 'vitro', 'compounds', 'compound', 'positive', 'that', 'using', 'based', 'chemical', 'chemicals', 'acid', 'pharmacology']);
+const weakKeywordWords = new Set(['article', 'based', 'case', 'data', 'evaluation', 'evidence', 'experimental', 'investigation', 'manuscript', 'observational', 'results', 'study', 'systematic', 'treatment', 'using', 'analysis', 'review']);
 
 function hasWholeWord(text: string, term: string) {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -203,7 +204,7 @@ function extractKeywords(text: string) {
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .filter(([word]) => !genericMatchWords.has(word))
+    .filter(([word]) => !genericMatchWords.has(word) && !weakKeywordWords.has(word) && !stopWords.has(word))
     .slice(0, 15)
     .map(([word]) => word);
 }
@@ -274,7 +275,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const semanticTokens = semanticText.match(/[a-z][a-z-]{4,}/g) ?? [];
   const semanticOverlap = semanticTokens.filter((token) => hasWholeWord(semanticJournalText, token)).length;
   const semanticFit = semanticProfile ? Math.min(20, semanticOverlap * 2) : 0;
-  const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && hasWordOrPlural(journalIdentityText, keyword));
+  const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && !weakKeywordWords.has(keyword) && hasWordOrPlural(journalIdentityText, keyword));
   const matchingTopics = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalIdentityText.includes(term)));
   const fieldTopicMatches = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalFieldText.includes(term)));
   const specificTopicMatches = matchingTopics.filter((topic) => !broadTopicNames.has(topic));
@@ -360,10 +361,6 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     score -= 3;
     warnings.push('Novelty statement not detected');
   }
-  if (!hasDirectTopicEvidence && (journal.field === profile.field || journal.field === 'Multidisciplinary')) {
-    score -= 20;
-    warnings.push('No direct journal-topic or keyword evidence; field-only overlap is not enough');
-  }
   if (incidentalNeighborPenalty) {
     score -= 25;
     warnings.push('Journal only overlaps via a nearby field term and not the manuscript\'s dominant topic');
@@ -397,17 +394,13 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     score -= 25;
     warnings.push('Journal does not show a direct drug-delivery or formulation scope match');
   }
-  if (!specificTopicMatches.length && matchingTopics.length > 0) {
-    score -= 15;
-    warnings.push('Only broad topic overlap detected; manuscript-specific specialty match is missing');
-  }
-  if (!specificTopicMatches.length && !matchingKeywords.length && !matchingMethods.length) {
-    score -= 25;
-    warnings.push('No concrete topic, keyword, or method evidence remains after filtering');
-  }
-  if (!directEvidence) {
+  const evidenceWeight = specificTopicMatches.length * 2 + matchingKeywords.length + (matchingMethods.length > 0 && matchingTopics.length > 0 ? 1 : 0);
+  if (evidenceWeight === 0) {
+    score -= 45;
+    warnings.push('No concrete topic, keyword, or method evidence connects this journal to the manuscript');
+  } else if (specificTopicMatches.length === 0) {
     score -= 20;
-    warnings.push('No direct topic, keyword, or method evidence connects this journal to the manuscript');
+    warnings.push('Only broad or partial evidence detected; no manuscript-specific specialty match');
   }
   if (!topicalEvidence && matchingMethods.length > 0) {
     warnings.push('Match is method-based; the journal topic was not directly confirmed');

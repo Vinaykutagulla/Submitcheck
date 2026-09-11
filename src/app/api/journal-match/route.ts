@@ -163,14 +163,10 @@ export async function POST(request: Request) {
         .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
-    // Prefer strong matches, but keep a small low-confidence shortlist when a
-    // narrow field or incomplete manuscript has no strict matches.
-    const strictMatches = rankedJournals.filter(({ match }) => match.score >= 40 && match.topicalEvidence);
-    const matches = (strictMatches.length > 0
-      ? strictMatches
-      : maxBudget === null
-        ? rankedJournals.filter(({ match }) => match.score >= 28 && match.directEvidence).slice(0, 8)
-        : [])
+    // Filters only define eligibility. A result still needs concrete manuscript
+    // topic evidence before it is shown as a recommendation.
+    const matches = rankedJournals
+      .filter(({ match }) => match.score >= 48 && match.topicalEvidence && match.directEvidence)
       .slice(0, 25);
     return NextResponse.json({
       source: 'supabase',
@@ -178,7 +174,7 @@ export async function POST(request: Request) {
       semanticProfileUsed: Boolean(semanticProfile),
       semanticProfileStatus: semanticResult.status,
       semanticProfileProviderStatus: semanticResult.providerStatus,
-      fallbackUsed: strictMatches.length === 0 && matches.length > 0,
+      fallbackUsed: false,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
     });
