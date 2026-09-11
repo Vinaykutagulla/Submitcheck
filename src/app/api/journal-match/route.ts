@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { filterJournals, profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
 import { lookupLiveApc } from '@/lib/journal-apc';
 import { parseApcInr } from '@/lib/apc';
-import { createSemanticProfile } from '@/lib/semantic-profile';
+import { createSemanticProfile, judgeJournalCandidates } from '@/lib/semantic-profile';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -176,18 +176,48 @@ export async function POST(request: Request) {
         .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
-    // Filters only define eligibility. A result still needs concrete manuscript
-    // topic evidence before it is shown as a recommendation.
-    const matches = rankedJournals
-      .filter(({ match }) => match.score >= 48 && match.topicalEvidence && match.directEvidence)
-      .slice(0, 25);
+    const judgeResult = await judgeJournalCandidates(
+      body.manuscriptText,
+      rankedJournals.slice(0, 15).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
+    );
+    const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
+    const judgedRanked = rankedJournals.map((entry) => {
+      const decision = judgeByName.get(entry.journal.name);
+      if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
+      const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
+      return {
+        ...entry,
+        judgeScore: decision.relevanceScore,
+        judgeReasons: decision.reasons,
+        judgeExclusions: decision.exclusions,
+        match: {
+          ...entry.match,
+          score: blendedScore,
+          matchSource: 'ai-semantic' as const,
+          reasons: [...entry.match.reasons, ...decision.reasons.map((reason) => `AI fit: ${reason}`)],
+          warnings: [...entry.match.warnings, ...decision.exclusions.map((reason) => `AI exclusion: ${reason}`)],
+        },
+      };
+    }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
+    const aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
+    const matches = judgedRanked
+      .filter(({ match, judgeScore, judgeExclusions }) => aiAvailable
+        ? match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0
+        : match.score >= 65 && Boolean(match.directEvidence))
+      .slice(0, 25)
+      .map((entry) => ({
+        ...entry,
+        match: { ...entry.match, matchSource: aiAvailable ? 'ai-semantic' as const : 'deterministic-fallback' as const },
+      }));
     return NextResponse.json({
       source: 'supabase',
       matches,
       semanticProfileUsed: Boolean(semanticProfile),
       semanticProfileStatus: semanticResult.status,
       semanticProfileProviderStatus: semanticResult.providerStatus,
-      fallbackUsed: false,
+      semanticJudgeStatus: judgeResult.status,
+      semanticJudgeProviderStatus: judgeResult.providerStatus,
+      fallbackUsed: !aiAvailable,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
     });

@@ -441,7 +441,7 @@ export default function Home() {
   const [declarationsConfirmed, setDeclarationsConfirmed] = useState(false);
   const [copiedSubmissionField, setCopiedSubmissionField] = useState('');
   const [showPricing, setShowPricing] = useState(false);
-  const [remoteMatches, setRemoteMatches] = useState<Array<{ journal: Journal; match: { score: number; confidence: 'High' | 'Medium' | 'Low'; reasons: string[]; warnings: string[] }; gaps: ReturnType<typeof getGaps> }> | null>(null);
+  const [remoteMatches, setRemoteMatches] = useState<Array<{ journal: Journal; match: { score: number; confidence: 'High' | 'Medium' | 'Low'; matchSource?: 'ai-semantic' | 'deterministic-fallback'; reasons: string[]; warnings: string[] }; gaps: ReturnType<typeof getGaps> }> | null>(null);
   const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -674,7 +674,7 @@ export default function Home() {
         setRemoteMatches(normalizedMatches);
         nextMatches = normalizedMatches;
         if (result.fallbackUsed) {
-          setSaveMessage('Showing the closest journal shortlist. Add an abstract and keywords for more precise matches.');
+          setSaveMessage('Basic matches shown because AI journal review is unavailable. Results use a stricter evidence threshold.');
         }
       } else {
         setRemoteMatches([]);

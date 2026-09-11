@@ -102,6 +102,7 @@ export type ManuscriptProfile = {
 export type JournalMatchResult = {
   score: number;
   confidence: 'High' | 'Medium' | 'Low';
+  matchSource?: 'ai-semantic' | 'deterministic-fallback';
   directEvidence?: boolean;
   topicalEvidence?: boolean;
   reasons: string[];
