@@ -5,12 +5,78 @@ export type MatchJournal = {
   scope: string[];
   asjcCodes?: string[];
   sponsored?: boolean;
+  indexing?: IndexingSource[];
+  quartile?: Quartile;
+  apc?: number | null;
+  apcDisplay?: string;
+  access?: AccessType;
+  oa?: boolean;
+  speed?: string;
+  indexed?: string[];
+  issn?: string;
+  eissn?: string;
+  submissionUrl?: string;
   requirements: {
     abstract: 'structured' | 'unstructured';
     wordLimit: number | null;
     refStyle: string;
   };
 };
+
+export type IndexingSource = 'Scopus' | 'Web of Science' | 'DOAJ' | 'PubMed' | 'UGC-CARE' | string;
+export type Quartile = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+export type AccessType = 'Open Access' | 'Subscription' | 'Hybrid';
+export type JournalFilters = {
+  field?: string;
+  indexing?: IndexingSource;
+  quartile?: Quartile;
+  maxBudget?: number | null;
+  access?: AccessType;
+};
+export type FilterResult<T> = {
+  results: T[];
+  excludedCount: number;
+  excludedForMissingData: { journal: T; missingField: keyof MatchJournal }[];
+};
+
+const anyFilterValues = new Set(['any', 'any field', 'any indexing', 'any quartile']);
+
+function isAnyFilter(value: string | undefined | null) {
+  return value == null || anyFilterValues.has(value.trim().toLowerCase());
+}
+
+export function filterJournals<T extends MatchJournal>(journals: T[], filters: JournalFilters): FilterResult<T> {
+  const excludedForMissingData: FilterResult<T>['excludedForMissingData'] = [];
+  let excludedCount = 0;
+  const exclude = (journal: T, missingField?: keyof MatchJournal) => {
+    excludedCount++;
+    if (missingField) excludedForMissingData.push({ journal, missingField });
+    return false;
+  };
+
+  const results = journals.filter((journal) => {
+    if (!isAnyFilter(filters.field) && journal.field !== filters.field) return exclude(journal);
+    if (!isAnyFilter(filters.indexing)) {
+      if (!journal.indexing?.length) return exclude(journal, 'indexing');
+      if (!journal.indexing.includes(filters.indexing as IndexingSource)) return exclude(journal);
+    }
+    if (!isAnyFilter(filters.quartile)) {
+      if (!journal.quartile) return exclude(journal, 'quartile');
+      if (journal.quartile !== filters.quartile) return exclude(journal);
+    }
+    if (filters.access && !isAnyFilter(filters.access)) {
+      if (!journal.access) return exclude(journal, 'access');
+      if (journal.access !== filters.access) return exclude(journal);
+    }
+    if (filters.maxBudget != null) {
+      if (journal.apc == null) return exclude(journal, 'apc');
+      if (journal.apc > filters.maxBudget) return exclude(journal);
+    }
+    return true;
+  });
+
+  return { results, excludedCount, excludedForMissingData };
+}
 
 export type ManuscriptProfile = {
   words: number;
@@ -33,6 +99,8 @@ export type ManuscriptProfile = {
 export type JournalMatchResult = {
   score: number;
   confidence: 'High' | 'Medium' | 'Low';
+  directEvidence?: boolean;
+  topicalEvidence?: boolean;
   reasons: string[];
   warnings: string[];
 };
@@ -40,11 +108,17 @@ export type JournalMatchResult = {
 const fieldSignals: Record<string, string[]> = {
   'Life Sciences': ['drug', 'pharmaceut', 'clinical', 'cell', 'protein', 'nanomedicine', 'formulation', 'biology', 'patient'],
   Chemistry: ['chemistry', 'synthesis', 'molecule', 'reaction', 'catalyst', 'polymer', 'spectroscopy', 'chemical'],
-  Engineering: ['engineering', 'prototype', 'mechanical', 'device', 'structural design'],
+  Engineering: ['engineering', 'prototype', 'mechanical', 'device', 'structural design', 'control system', 'robotics'],
   'Computer Science': ['algorithm', 'machine learning', 'software', 'dataset', 'neural network', 'computer', 'model'],
   Physics: ['physics', 'quantum', 'particle', 'material', 'energy', 'optical', 'magnetic'],
   'Social Sciences': ['survey', 'policy', 'education', 'social', 'behavior', 'psychology', 'interview', 'qualitative'],
   Medicine: ['patient', 'clinical trial', 'diagnosis', 'hospital', 'treatment', 'disease', 'health'],
+  Agriculture: ['crop', 'soil', 'agriculture', 'agricultural', 'plant growth', 'yield', 'irrigation', 'pesticide'],
+  'Environmental Science': ['environmental', 'ecosystem', 'pollution', 'climate', 'water quality', 'wastewater', 'biodiversity'],
+  'Earth and Planetary Sciences': ['geology', 'geological', 'seismic', 'tectonic', 'remote sensing', 'sediment', 'planetary'],
+  'Materials Science': ['material', 'nanomaterial', 'composite', 'ceramic', 'alloy', 'thin film', 'characterization'],
+  Economics: ['econometric', 'economic', 'finance', 'market', 'regression', 'firm', 'income', 'trade'],
+  'Arts and Humanities': ['literature', 'history', 'culture', 'language', 'philosophy', 'heritage', 'discourse'],
 };
 
 export const topicFamilies: Record<string, string[]> = {
@@ -61,15 +135,36 @@ export const topicFamilies: Record<string, string[]> = {
   education: ['education', 'student', 'teaching', 'classroom', 'university'],
   psychology: ['psychology', 'behavior', 'cognitive', 'mental health', 'participants'],
   medicine: ['patient', 'clinical', 'diagnosis', 'treatment', 'disease', 'health'],
+  'infectious diseases': ['infectious disease', 'infectious diseases', 'mpox', 'monkeypox', 'orthopoxvirus', 'pathogen', 'outbreak', 'epidemic'],
+  epidemiology: ['epidemiology', 'incidence', 'prevalence', 'transmission', 'case fatality', 'surveillance', 'cohort'],
+  virology: ['virus', 'viral', 'virology', 'orthopoxvirus', 'clade', 'pathogen'],
+  'public health': ['public health', 'health policy', 'surveillance', 'vaccination', 'vaccine effectiveness', 'outbreak response'],
+  'global health': ['global health', 'health equity', 'low-resource', 'international health', 'developing countries'],
+  agriculture: ['crop', 'soil', 'agriculture', 'agricultural', 'plant growth', 'yield', 'irrigation', 'pesticide'],
+  environmental: ['environmental', 'ecosystem', 'pollution', 'climate', 'water quality', 'wastewater', 'biodiversity'],
+  'earth science': ['geology', 'geological', 'seismic', 'tectonic', 'remote sensing', 'sediment', 'planetary'],
+  materials: ['material', 'nanomaterial', 'composite', 'ceramic', 'alloy', 'thin film', 'characterization'],
+  economics: ['econometric', 'economic', 'finance', 'market', 'regression', 'firm', 'income', 'trade'],
+  'social research': ['survey', 'policy', 'social', 'behavior', 'interview', 'qualitative', 'participants'],
+  humanities: ['literature', 'history', 'culture', 'language', 'philosophy', 'heritage', 'discourse'],
+  'data science': ['dataset', 'algorithm', 'machine learning', 'regression', 'classifier', 'prediction'],
   interdisciplinary: ['interdisciplinary', 'multidisciplinary', 'across fields', 'broad impact'],
 };
 
+const broadTopicNames = new Set(['pharmacology', 'medicine', 'chemistry', 'synthesis', 'engineering', 'psychology', 'education', 'data science']);
+
 const stopWords = new Set('about after again against also among because before being between both could does during each from further have having into itself more most other over same should some such than their there these they this those through under very what when where which while with would your'.split(' '));
-const genericMatchWords = new Set(['molecular', 'dynamics', 'network', 'simulation', 'model', 'study', 'research', 'analysis', 'method', 'methods', 'results', 'abstract', 'in-vitro', 'vitro', 'compounds', 'compound', 'positive', 'that', 'using', 'based', 'chemical', 'chemicals', 'acid', 'pharmacology']);
+const genericMatchWords = new Set(['molecular', 'dynamics', 'simulation', 'model', 'modeling', 'network', 'computational', 'study', 'research', 'analysis', 'method', 'methods', 'results', 'abstract', 'in-vitro', 'vitro', 'compounds', 'compound', 'positive', 'that', 'using', 'based', 'chemical', 'chemicals', 'acid', 'pharmacology']);
 
 function hasWholeWord(text: string, term: string) {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(?:^|\\b)${escaped}(?:$|\\b)`, 'i').test(text);
+}
+
+function hasWordOrPlural(text: string, term: string) {
+  if (hasWholeWord(text, term)) return true;
+  if (term.length > 4 && term.endsWith('s') && hasWholeWord(text, term.slice(0, -1))) return true;
+  return !term.endsWith('s') && hasWholeWord(text, `${term}s`);
 }
 
 function countWords(text: string) {
@@ -106,8 +201,8 @@ function extractKeywords(text: string) {
   }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 15)
     .filter(([word]) => !genericMatchWords.has(word))
+    .slice(0, 15)
     .map(([word]) => word);
 }
 
@@ -165,37 +260,62 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal):
   const reasons: string[] = [];
   const warnings: string[] = [];
   const journalText = `${journal.name} ${journal.publisher ?? ''} ${journal.field} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
-  const journalIdentityText = `${journal.name} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
-  const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && hasWholeWord(journalIdentityText, keyword));
+  const journalIdentityText = `${journal.name} ${journal.publisher ?? ''} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
+  const journalFieldText = journal.field.toLowerCase();
+  const matchingKeywords = profile.keywords.filter((keyword) => !genericMatchWords.has(keyword) && hasWordOrPlural(journalIdentityText, keyword));
   const matchingTopics = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalIdentityText.includes(term)));
-  const specificTopicMatches = matchingTopics.filter((topic) => !['pharmacology', 'medicine', 'chemistry', 'synthesis'].includes(topic));
+  const fieldTopicMatches = profile.topics.filter((topic) => topicFamilies[topic].some((term) => journalFieldText.includes(term)));
+  const specificTopicMatches = matchingTopics.filter((topic) => !broadTopicNames.has(topic));
   const matchingMethods = profile.methods.filter((method) => hasWholeWord(journalIdentityText, method));
+  const topicalEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0;
+  const directEvidence = topicalEvidence || (matchingMethods.length > 0 && matchingTopics.length > 0);
+  const profileIdentityText = `${profile.topics.join(' ')} ${profile.keywords.join(' ')}`;
+  const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory/.test(journalText);
   const biomedicalProfile = profile.topics.some((topic) => ['pharmacology', 'natural products', 'molecular pharmacology', 'analytical profiling'].includes(topic)) || profile.field === 'Life Sciences' || profile.field === 'Medicine';
+  const crossDomainTopicFit = matchingTopics.length > 0 && !biomedicalProfile;
+  const nonBiomedicalJournalMismatch = biomedicalProfile
+    && !biomedicalJournal
+    && journal.field !== 'Multidisciplinary'
+    && matchingTopics.length > 0;
+  const pharmaceuticalProfile = profile.topics.some((topic) => ['pharmaceutics', 'drug delivery', 'molecular pharmacology', 'natural products', 'analytical profiling'].includes(topic))
+    || /nanoparticle|polymeric|sustained[- ]release|drug delivery|pharmaceutical|formulation|encapsulation/.test(profileIdentityText);
+  const pharmaceuticalJournalField = /pharmaceutical|pharmacolog|pharmaceutic|toxicolog|medicinal|drug delivery|biomedical|chemistry/.test(journal.field.toLowerCase());
+  const offDomainPharmaceuticalJournal = pharmaceuticalProfile
+    && /arts? and humanities|history|music|education|agricultur|agronom|crop science|animal science|environment|computer|engineering|social science|economics|finance|tourism|heritage|vaccine|immunolog/.test(journalSpecialtyText)
+    && !pharmaceuticalJournalField;
   const fieldFit = journal.field === profile.field
     ? 30
     : journal.field === 'Multidisciplinary'
       ? 12
       : biomedicalProfile && biomedicalJournal && matchingTopics.length
         ? specificTopicMatches.length ? 16 : 8
-        : 0;
+        : crossDomainTopicFit && matchingTopics.length ? 14 : 0;
   const scopeFit = specificTopicMatches.length
     ? Math.min(30, specificTopicMatches.length * 15)
-    : matchingTopics.length ? 8 : 0;
+    : fieldTopicMatches.length ? 5 : matchingTopics.length ? 8 : 0;
   const keywordFit = Math.min(15, matchingKeywords.length * 5);
   const methodFit = Math.min(15, matchingMethods.length * 5);
   const biomedicalFit = biomedicalProfile && biomedicalJournal && specificTopicMatches.length ? 6 : 0;
+  const interdisciplinaryFit = journal.field === 'Multidisciplinary' && matchingTopics.length ? 8 : 0;
+  const methodOnlyTopicFit = profile.topics.includes('natural products')
+    && !matchingTopics.includes('natural products')
+    && matchingTopics.some((topic) => ['molecular pharmacology', 'data science'].includes(topic))
+    && matchingMethods.length > 0;
   const nucleicAcidJournal = /\bnucleic acids?\b/i.test(journalText);
+  const specialtyMismatch = /alzheimer|dementia|hiv|fluoride|oncolog|diabetes|cardiology|cardiovascular|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(journalSpecialtyText)
+    && !/alzheimer|dementia|\bhiv\b|fluoride|oncolog|diabetes|cardiolog|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(profileIdentityText);
   const articleFit = profile.articleType === 'Unknown' ? 8 : journal.name.toLowerCase().includes(profile.articleType.toLowerCase()) ? 15 : 10;
   const requirementFit = journal.requirements.wordLimit === null ? 0 : profile.words <= journal.requirements.wordLimit ? 10 : 0;
-  let score = fieldFit + scopeFit + keywordFit + methodFit + articleFit + requirementFit + biomedicalFit;
+  let score = fieldFit + scopeFit + keywordFit + methodFit + articleFit + requirementFit + biomedicalFit + interdisciplinaryFit;
 
   if (fieldFit >= 30) reasons.push(`Strong ${profile.field} field alignment`);
   else if (fieldFit === 12) reasons.push('Broad multidisciplinary scope can accommodate this field');
-  else if (fieldFit > 0 && specificTopicMatches.length) reasons.push('Relevant biomedical field with specific topic overlap');
+  else if (fieldFit > 0 && specificTopicMatches.length) reasons.push(`Relevant ${profile.field.toLowerCase()} field with specific topic overlap`);
   else warnings.push(`Field mismatch: manuscript signals ${profile.field}, journal is ${journal.field}`);
   if (specificTopicMatches.length) reasons.push(`Specific topic overlap: ${specificTopicMatches.slice(0, 3).join(', ')}`);
-  else if (matchingTopics.length) warnings.push('Only broad pharmacology field overlap detected');
+  else if (fieldTopicMatches.length) warnings.push(`Topic appears only in the journal field, not its scope or title`);
+  else if (matchingTopics.length) warnings.push(`Only broad ${profile.field.toLowerCase()} field overlap detected`);
   else warnings.push('No strong topic or scope overlap detected');
   if (matchingKeywords.length) reasons.push(`Keyword overlap: ${matchingKeywords.slice(0, 4).join(', ')}`);
   if (matchingMethods.length) reasons.push(`Method overlap: ${matchingMethods.slice(0, 3).join(', ')}`);
@@ -221,10 +341,33 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal):
     score -= 50;
     warnings.push('Journal focuses on nucleic-acid research, but this manuscript does not');
   }
+  if (specialtyMismatch) {
+    score -= 30;
+    warnings.push('Journal has a disease-specific focus not detected in the manuscript');
+  }
+  if (nonBiomedicalJournalMismatch) {
+    score -= 25;
+    warnings.push('Journal field is outside the manuscript\'s biomedical domain');
+  }
+  if (methodOnlyTopicFit) {
+    score -= 30;
+    warnings.push('Journal fit is driven by a method, not the manuscript\'s primary natural-products topic');
+  }
+  if (offDomainPharmaceuticalJournal) {
+    score -= 40;
+    warnings.push('Journal specialty is outside the manuscript\'s pharmaceutical formulation domain');
+  }
+  if (!directEvidence) {
+    score -= 20;
+    warnings.push('No direct topic, keyword, or method evidence connects this journal to the manuscript');
+  }
+  if (!topicalEvidence && matchingMethods.length > 0) {
+    warnings.push('Match is method-based; the journal topic was not directly confirmed');
+  }
 
   score = Math.max(0, Math.min(98, Math.round(score)));
   const confidence = score >= 72 && warnings.length <= 1 ? 'High' : score >= 48 ? 'Medium' : 'Low';
-  return { score, confidence, reasons, warnings };
+  return { score, confidence, directEvidence, topicalEvidence, reasons, warnings };
 }
 
 export function rankJournals<T extends MatchJournal>(text: string, journals: T[]) {
@@ -232,4 +375,9 @@ export function rankJournals<T extends MatchJournal>(text: string, journals: T[]
   return journals
     .map((journal) => ({ journal, profile, match: scoreJournal(profile, journal) }))
     .sort((a, b) => b.match.score - a.match.score || a.journal.name.localeCompare(b.journal.name));
+}
+
+export function rankAndFilterJournals<T extends MatchJournal>(text: string, journals: T[], filters: JournalFilters) {
+  const filtered = filterJournals(journals, filters);
+  return { ranked: rankJournals(text, filtered.results), excludedForMissingData: filtered.excludedForMissingData, excludedCount: filtered.excludedCount };
 }

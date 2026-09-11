@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
+import { filterJournals, profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
 import { lookupLiveApc } from '@/lib/journal-apc';
+import { parseApcInr } from '@/lib/apc';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -21,12 +22,18 @@ function coerceIndexList(value: unknown): string[] {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { manuscriptText?: unknown; field?: unknown; indexing?: unknown; quartile?: unknown; budget?: unknown };
+    let body: { manuscriptText?: unknown; field?: unknown; indexing?: unknown; quartile?: unknown; budget?: unknown; access?: unknown };
+    try {
+      body = await request.json() as { manuscriptText?: unknown; field?: unknown; indexing?: unknown; quartile?: unknown; budget?: unknown; access?: unknown };
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON request body.' }, { status: 400 });
+    }
+
     if (typeof body.manuscriptText !== 'string' || body.manuscriptText.trim().length < 3) {
       return NextResponse.json({ error: 'Add a title, abstract, or manuscript text before matching.' }, { status: 400 });
     }
 
-    const maxBudget = typeof body.budget === 'number' && body.budget > 0 ? body.budget : null;
+    const maxBudget = typeof body.budget === 'number' && Number.isFinite(body.budget) && body.budget > 0 ? body.budget : null;
     const manuscriptProfile = profileManuscript(body.manuscriptText);
 
     const supabase = getAdminClient();
@@ -51,7 +58,7 @@ export async function POST(request: Request) {
         .from('journals')
         .select(`id,source_record_id,name,issn,eissn,publisher,field,source_type,subjects,quartile,oa,apc_display,indexed,scope,asjc_codes,requirements,sponsored,sponsor_tier,submission_url,${indexingRelation}`)
         .eq('source_type', 'Journal')
-        .limit(300);
+        .limit(1000);
 
       if (typeof body.field === 'string' && body.field !== 'Any field') {
         nextQuery = nextQuery.contains('subjects', [body.field]);
@@ -70,16 +77,21 @@ export async function POST(request: Request) {
       return nextQuery;
     }
 
-    let { data, error } = await buildQuery(true);
-    if (error) throw error;
-    if (!data?.length) {
-      const fallback = await buildQuery(false);
-      data = fallback.data;
-      error = fallback.error;
-    }
-    if (error) throw error;
+    const keywordQuery = await buildQuery(true);
+    if (keywordQuery.error) throw keywordQuery.error;
 
-    const journals = (data ?? []).map((row) => {
+    // Keyword search is useful for narrowing a large catalog, but it must not
+    // decide which journals are eligible for ranking. Merge it with the
+    // filtered catalog so relevant journals whose metadata uses different
+    // wording are still considered.
+    const broadQuery = await buildQuery(false);
+    if (broadQuery.error) throw broadQuery.error;
+    const candidateRows = [...(keywordQuery.data ?? []), ...(broadQuery.data ?? [])];
+    const rowsById = new Map<string, (typeof candidateRows)[number]>();
+    for (const row of candidateRows) {
+      rowsById.set(String(row.id), row);
+    }
+    const journals = [...rowsById.values()].map((row) => {
       const requirements = (row as { requirements?: { abstract?: { type?: string }; wordLimit?: number; refStyle?: string } }).requirements ?? {};
       const enrichedIndexings = coerceIndexList((row as { journal_indexings?: unknown }).journal_indexings);
 
@@ -91,14 +103,17 @@ export async function POST(request: Request) {
         submissionUrl: row.submission_url ?? undefined,
         publisher: row.publisher ?? 'Publisher not listed',
         field: row.field ?? 'Multidisciplinary',
-        quartile: row.quartile ?? 'Unranked',
+        quartile: /^Q[1-4]$/.test(row.quartile ?? '') ? row.quartile as 'Q1' | 'Q2' | 'Q3' | 'Q4' : undefined,
         oa: Boolean(row.oa),
-        apc: row.apc_display ?? 'Check journal website',
+        apc: parseApcInr(row.apc_display),
+        apcDisplay: row.apc_display ?? 'Check journal website',
         speed: 'Check journal website',
-        indexed: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : ['Scopus']),
+        indexing: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : []),
+        indexed: enrichedIndexings.length ? enrichedIndexings : (Array.isArray(row.indexed) ? row.indexed : []),
         scope: Array.isArray(row.subjects) && row.subjects.length ? row.subjects : (Array.isArray(row.scope) ? row.scope : []),
         asjcCodes: Array.isArray(row.asjc_codes) ? row.asjc_codes : [],
         sponsored: Boolean(row.sponsored),
+        access: row.oa ? 'Open Access' as const : 'Subscription' as const,
         requirements: {
           abstract: (requirements.abstract?.type === 'structured' ? 'structured' : 'unstructured') as 'structured' | 'unstructured',
           wordLimit: Number(requirements.wordLimit) || null,
@@ -107,29 +122,60 @@ export async function POST(request: Request) {
       };
     });
 
-    let rankedJournals = rankJournals(body.manuscriptText, journals);
+    const filterResult = filterJournals(journals, {
+      // Supabase already applies the exact subject taxonomy filter above.
+      field: undefined,
+      indexing: typeof body.indexing === 'string' && body.indexing !== 'Any indexing'
+        ? body.indexing === 'WoS' ? 'Web of Science' : body.indexing
+        : undefined,
+      quartile: typeof body.quartile === 'string' && /^Q[1-4] only$/.test(body.quartile)
+        ? body.quartile.slice(0, 2) as 'Q1' | 'Q2' | 'Q3' | 'Q4'
+        : undefined,
+      access: body.access === 'Open Access' || body.access === 'Subscription' || body.access === 'Hybrid' ? body.access : undefined,
+    });
+    let rankedJournals = rankJournals(body.manuscriptText, filterResult.results);
+    let excludedForMissingData = filterResult.excludedForMissingData;
     if (maxBudget !== null) {
-      const candidates = rankedJournals.slice(0, 40);
-      const enriched = await Promise.all(candidates.map(async ({ journal, profile, match }) => {
-        const catalogApc = Number(String(journal.apc).replace(/[^0-9]/g, '')) || null;
-        if (catalogApc !== null) return { journal, profile, match };
+      const catalogMatches = rankedJournals.filter(({ journal }) => {
+        return journal.apc !== null && journal.apc !== undefined && journal.apc <= maxBudget;
+      });
+      const unknownCandidates = rankedJournals
+        .filter(({ journal }) => journal.apc === null || journal.apc === undefined)
+        .slice(0, Math.max(20, 40 - catalogMatches.length));
+      const enriched = await Promise.all(unknownCandidates.map(async ({ journal, profile, match }) => {
         const liveApc = await lookupLiveApc(journal.issn || journal.eissn, journal.submissionUrl);
         if (liveApc) {
-          return { journal: { ...journal, apc: `${liveApc.amount} ${liveApc.currency}` }, profile, match };
+          const liveDisplay = liveApc.amount == null ? null : `${liveApc.amount} ${liveApc.currency ?? ''}`.trim();
+          return { journal: { ...journal, apc: parseApcInr(liveDisplay), apcDisplay: liveDisplay ?? journal.apcDisplay }, profile, match };
         }
         return { journal, profile, match };
       }));
-      rankedJournals = enriched.filter(({ journal }) => {
-        const apc = Number(String(journal.apc).replace(/[^0-9]/g, '')) || null;
-        return apc !== null && apc <= maxBudget;
+      const verifiedLiveMatches = enriched.filter(({ journal }) => {
+        return journal.apc !== null && journal.apc !== undefined && journal.apc <= maxBudget;
       });
+      rankedJournals = [...catalogMatches, ...verifiedLiveMatches]
+        .sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
+      excludedForMissingData = [...excludedForMissingData, ...unknownCandidates
+        .filter(({ journal }) => journal.apc === null || journal.apc === undefined)
+        .map(({ journal }) => ({ journal, missingField: 'apc' as const }))];
     }
 
-    // Do not present catalog rows that only matched a generic word from the manuscript.
-    const matches = rankedJournals
-      .filter(({ match }) => match.score >= 40)
+    // Prefer strong matches, but keep a small low-confidence shortlist when a
+    // narrow field or incomplete manuscript has no strict matches.
+    const strictMatches = rankedJournals.filter(({ match }) => match.score >= 40 && match.topicalEvidence);
+    const matches = (strictMatches.length > 0
+      ? strictMatches
+      : maxBudget === null
+        ? rankedJournals.filter(({ match }) => match.score >= 28 && match.directEvidence).slice(0, 8)
+        : [])
       .slice(0, 25);
-    return NextResponse.json({ source: 'supabase', matches });
+    return NextResponse.json({
+      source: 'supabase',
+      matches,
+      fallbackUsed: strictMatches.length === 0 && matches.length > 0,
+      excludedCount: excludedForMissingData.length,
+      excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
+    });
   } catch (error) {
     console.error('Journal match failed:', error);
     return NextResponse.json({ error: 'Unable to search the journal catalog.' }, { status: 500 });

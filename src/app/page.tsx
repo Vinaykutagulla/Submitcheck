@@ -1,9 +1,10 @@
 'use client';
 
 import { Document, InsertedTextRun, Packer, Paragraph, TextRun } from 'docx';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseUploadedManuscript } from '@/lib/upload-utils';
-import { profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
+import { profileManuscript, rankJournals, topicFamilies, type Quartile } from '@/utils/decisionTreeMatcher';
 import { SubmissionField } from '@/components/SubmissionField';
 
 declare global {
@@ -20,9 +21,10 @@ type Journal = {
   authorInstructionsUrl?: string;
   publisher: string;
   field: string;
-  quartile: string;
+  quartile: Quartile;
   oa: boolean;
-  apc: string;
+  apc?: number | null;
+  apcDisplay?: string;
   speed: string;
   indexed: string[];
   scope: string[];
@@ -51,12 +53,12 @@ References
 1. Williams, H.D. et al. (2013). Journal of Pharmaceutical Sciences.`;
 
 const journals: Journal[] = [
-  { name: 'Journal of Controlled Release', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: '₹4,00,000', speed: '5 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['drug delivery', 'formulation', 'nanomedicine'], requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
-  { name: 'International Journal of Pharmaceutics', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: '₹3,68,000', speed: '4 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
-  { name: 'Pharmaceutics', publisher: 'MDPI', field: 'Life Sciences', quartile: 'Q1', oa: true, apc: '₹1,65,000', speed: '18 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 8000, refStyle: 'Numbered' } },
-  { name: 'AAPS PharmSciTech', publisher: 'Springer', field: 'Life Sciences', quartile: 'Q2', oa: false, apc: '₹1,85,000', speed: '15 days', indexed: ['Scopus', 'WoS'], scope: ['pharmaceutical technology', 'formulation'], requirements: { abstract: 'structured', wordLimit: 6000, refStyle: 'Numbered' } },
-  { name: 'Molecules', publisher: 'MDPI', field: 'Chemistry', quartile: 'Q2', oa: true, apc: '₹1,55,000', speed: '14 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['chemistry', 'synthesis'], sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 6000, refStyle: 'Numbered' } },
-  { name: 'Scientific Reports', publisher: 'Springer Nature', field: 'Multidisciplinary', quartile: 'Q1', oa: true, apc: '₹1,95,000', speed: '30 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['interdisciplinary', 'all fields'], requirements: { abstract: 'unstructured', wordLimit: 5000, refStyle: 'Numbered' } },
+  { name: 'Journal of Controlled Release', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: 400000, apcDisplay: '₹4,00,000', speed: '5 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['drug delivery', 'formulation', 'nanomedicine'], requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
+  { name: 'International Journal of Pharmaceutics', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: 368000, apcDisplay: '₹3,68,000', speed: '4 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
+  { name: 'Pharmaceutics', publisher: 'MDPI', field: 'Life Sciences', quartile: 'Q1', oa: true, apc: 165000, apcDisplay: '₹1,65,000', speed: '18 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 8000, refStyle: 'Numbered' } },
+  { name: 'AAPS PharmSciTech', publisher: 'Springer', field: 'Life Sciences', quartile: 'Q2', oa: false, apc: 185000, apcDisplay: '₹1,85,000', speed: '15 days', indexed: ['Scopus', 'WoS'], scope: ['pharmaceutical technology', 'formulation'], requirements: { abstract: 'structured', wordLimit: 6000, refStyle: 'Numbered' } },
+  { name: 'Molecules', publisher: 'MDPI', field: 'Chemistry', quartile: 'Q2', oa: true, apc: 155000, apcDisplay: '₹1,55,000', speed: '14 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['chemistry', 'synthesis'], sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 6000, refStyle: 'Numbered' } },
+  { name: 'Scientific Reports', publisher: 'Springer Nature', field: 'Multidisciplinary', quartile: 'Q1', oa: true, apc: 195000, apcDisplay: '₹1,95,000', speed: '30 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['interdisciplinary', 'all fields'], requirements: { abstract: 'unstructured', wordLimit: 5000, refStyle: 'Numbered' } },
 ];
 
 const steps = [
@@ -80,17 +82,6 @@ const scopusFields = [
 const quartileOptions = ['Any quartile', 'Q1 only', 'Q2 only', 'Q3 only', 'Q4 only'];
 const maximumBudget = 500000;
 
-function parseApcToNumber(rawApc: string | undefined | null) {
-  if (!rawApc || rawApc.toLowerCase().includes('check')) return null;
-
-  const cleaned = rawApc
-    .replace(/[^0-9.,]/g, '')
-    .replace(/,/g, '');
-
-  const value = Number(cleaned);
-  return Number.isFinite(value) ? value : null;
-}
-
 function formatBudget(value: number) {
   return `₹${value.toLocaleString('en-IN')}`;
 }
@@ -107,6 +98,27 @@ function inferDraftAnchor(title: string) {
   if (/(references?|citation|apa)/i.test(lower)) return 'references';
 
   return 'end';
+}
+
+function inferLikelySubmissionRequirements(journal: Journal) {
+  const normalized = `${journal.name} ${journal.publisher} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
+  const titlePage = /nature|science|wiley|elsevier|springer|cell|plos|frontiers|clinical|surgery|medicine|journal of/.test(normalized) || !journal.oa;
+  const coverLetter = /nature|science|cell|springer|wiley|elsevier|letters|communications|reports/.test(normalized) || !journal.oa;
+  const graphicalAbstract = /nature|science|cell|communications|reports|letters|research|clinical|medicine|biomedical|pharmaceutics/.test(normalized) || journal.field.toLowerCase().includes('life sciences');
+  const supplementaryFiles = /nature|science|cell|communications|reports|letters|frontiers|medrxiv/.test(normalized);
+
+  return {
+    titlePage,
+    coverLetter,
+    graphicalAbstract,
+    supplementaryFiles,
+    notes: [
+      titlePage ? 'Separate title page likely required.' : 'Title page usually optional for this journal.',
+      coverLetter ? 'Cover letter may be expected.' : 'Cover letter is likely optional.',
+      graphicalAbstract ? 'Graphical abstract may be requested.' : 'Graphical abstract is not strongly indicated.',
+      supplementaryFiles ? 'Supplementary materials may be expected.' : 'Supplementary files are unlikely to be mandatory.',
+    ],
+  };
 }
 
 function detectSectionName(line: string) {
@@ -455,7 +467,7 @@ export default function Home() {
   const [appliedDrafts, setAppliedDrafts] = useState<Array<{ title: string; text: string; anchor: string }>>([]);
   const localMatches = useMemo(() => rankJournals(text, journals
     .filter((journal) => field === 'Any field' || journal.field === field)
-    .filter((journal) => budget === 0 || (parseApcToNumber(journal.apc) !== null && (parseApcToNumber(journal.apc) as number) <= budget))
+    .filter((journal) => budget === 0 || (journal.apc !== null && journal.apc !== undefined && journal.apc <= budget))
     .filter((journal) => matchesQuartile(journal.quartile, quartile)))
     .map(({ journal, match }) => ({ journal, match, gaps: getGaps(text, journal) })), [text, field, quartile, budget]);
   const matches = useMemo(() => {
@@ -545,6 +557,25 @@ export default function Home() {
     loadSavedManuscripts();
   }, []);
 
+  useEffect(() => {
+    const manuscriptId = new URLSearchParams(window.location.search).get('manuscriptId');
+    if (!manuscriptId) return;
+
+    fetch(`/api/manuscripts/${encodeURIComponent(manuscriptId)}`)
+      .then(async (response) => {
+        const payload = await response.json() as { manuscript?: { id: string; title: string; raw_text: string }; error?: string };
+        if (!response.ok || !payload.manuscript) throw new Error(payload.error || 'Unable to reopen manuscript.');
+        setTitle(payload.manuscript.title);
+        setText(payload.manuscript.raw_text);
+        setActiveManuscriptId(payload.manuscript.id);
+        setRemoteMatches(null);
+        setSelected(null);
+        setAiGaps([]);
+        setSaveMessage('Saved manuscript reopened. Run analysis to refresh journal matches.');
+      })
+      .catch((error) => setSaveMessage(error instanceof Error ? error.message : 'Unable to reopen manuscript.'));
+  }, []);
+
   const handleUploadFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -622,12 +653,12 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ manuscriptText, field: nextField, indexing: nextIndexing, quartile: nextQuartile, budget: nextBudget || null }),
       });
-      const result = await response.json() as { source?: string; matches?: typeof remoteMatches };
+      const result = await response.json() as { source?: string; matches?: typeof remoteMatches; fallbackUsed?: boolean };
       if (result.source === 'supabase' && result.matches) {
         const nucleicAcidFocus = /\b(?:nucleic acid|rna|mrna|mirna|sirna|dna|crispr|oligonucleotide|transcriptom|gene expression)\b/i.test(manuscriptText);
         const educationFocus = /\b(?:education|teaching|classroom|curriculum|pedagog|student|school)\b/i.test(manuscriptText);
         const normalizedMatches = result.matches
-          .filter(({ journal, match }) => match.score >= 40
+          .filter(({ journal, match }) => match.score >= 28
             && !(/\bnucleic acids?\b/i.test(journal.name) && !nucleicAcidFocus)
             && !(match.reasons.some((reason) => /topic overlap: education|keyword overlap: acid/i.test(reason)) && !educationFocus))
           .map(({ journal, match }) => ({
@@ -637,6 +668,9 @@ export default function Home() {
           }));
         setRemoteMatches(normalizedMatches);
         nextMatches = normalizedMatches;
+        if (result.fallbackUsed) {
+          setSaveMessage('Showing the closest journal shortlist. Add an abstract and keywords for more precise matches.');
+        }
       } else {
         setRemoteMatches(null);
       }
@@ -714,7 +748,7 @@ export default function Home() {
           journalRequirements: {
             quartile: journalOverride?.quartile ?? selected?.quartile ?? 'Unranked',
             openAccess: journalOverride?.oa ?? selected?.oa ?? false,
-            apc: journalOverride?.apc ?? selected?.apc ?? 'Not verified',
+            apc: journalOverride?.apcDisplay ?? selected?.apcDisplay ?? 'Not verified',
             scope: journalOverride?.scope ?? selected?.scope ?? [],
             abstract: journalOverride?.requirements.abstract ?? selected?.requirements.abstract ?? 'unstructured',
             wordLimit: journalOverride?.requirements.wordLimit ?? selected?.requirements.wordLimit ?? null,
@@ -984,7 +1018,7 @@ export default function Home() {
           <section className="panel"><label className="panel-label">Narrow it down</label><div className="filters"><label>Field<select value={field} onChange={(event) => { const value = event.target.value; setField(value); void runMatch({ field: value }); }}><option>Any field</option>{scopusFields.map((subject) => <option key={subject}>{subject}</option>)}</select></label><label>Indexing<select value={indexing} onChange={(event) => { const value = event.target.value; setIndexing(value); void runMatch({ indexing: value }); }}><option>Any indexing</option>{indexStats.length ? indexStats.filter((item) => item.count > 0).map((item) => <option key={item.name} value={item.name}>{item.name} ({item.count.toLocaleString()} verified)</option>) : <option value="Scopus">Scopus</option>}</select></label><label>Quartile<select value={quartile} onChange={(event) => { const value = event.target.value; setQuartile(value); void runMatch({ quartile: value }); }}>{quartileOptions.map((option) => <option key={option}>{option}</option>)}</select></label><label className="budget-filter">Budget <strong>{budget === 0 ? 'Any budget' : `${formatBudget(budget)} or less`}</strong><input type="range" min="0" max={maximumBudget} step="1000" value={budget} aria-label="Maximum publication budget" onChange={(event) => { const value = Number(event.target.value); setBudget(value); void runMatch({ budget: value }); }} /><span className="budget-range"><small>Any</small><small>₹1,000</small><small>{formatBudget(maximumBudget)}</small></span></label><label>Access<select value={access} onChange={(event) => setAccess(event.target.value)}><option>Any</option><option>OA / Free</option><option>Paid</option></select></label></div></section>
           <section className="panel journal-lookup-panel"><label className="panel-label">Check any journal directly <span className="hint">Search by journal name, publisher, or ISSN to see indexing and quartile details.</span></label><form className="journal-lookup-form" onSubmit={lookupJournal}><input value={journalLookupQuery} onChange={(event) => setJournalLookupQuery(event.target.value)} placeholder="e.g. Nature Reviews Cardiology, ISSN, or publisher" /><button className="btn btn-primary" type="submit" disabled={journalLookupLoading}>{journalLookupLoading ? 'Searching...' : 'Check journal'}</button></form>{journalLookupResults.length > 0 && <div className="journal-lookup-results">{journalLookupResults.map((journal) => { const details = journalLookupDetails[journal.id]; return <div className="lookup-result" key={journal.id}><div><strong>{journal.name}</strong><span>{journal.publisher} · {journal.field}</span><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}{journal.oa && <span className="tag oa">Open access</span>}</div></div><div className="lookup-actions">{journal.issn && <small>ISSN {journal.issn}</small>}<a className="btn-small journal-link" href={journal.submissionUrl || `https://www.google.com/search?q=${encodeURIComponent(`${journal.name} official journal website`)}`} target="_blank" rel="noreferrer">↗ Website</a>{(journal.issn || journal.eissn) && <button type="button" className="btn-small" onClick={() => lookupJournalDetails(journal)}>{details ? 'Refresh details' : 'APC/details'}</button>}</div>{details && <div className="lookup-details"><span><strong>APC:</strong> {details.amount ? `${details.amount} ${details.currency}` : 'Not listed'}</span><span><strong>Speed:</strong> {details.publicationWeeks ? `${details.publicationWeeks} weeks` : 'Not listed'}</span>{details.journalUrl && <a href={details.journalUrl} target="_blank" rel="noreferrer">Open official website</a>}{details.apcUrl ? <a href={details.apcUrl} target="_blank" rel="noreferrer">View APC source</a> : details.apcSearchUrl ? <a href={details.apcSearchUrl} target="_blank" rel="noreferrer">Find APC pricing</a> : null}</div>}</div>; })}</div>}</section>
           <div className="section-title">Matching journals <span>{text ? `${Math.min(matches.length, plan === 'pro' ? matches.length : 3)} matched by fit` : ''}</span></div>
-          {noBudgetMatches && <div className="empty">No catalog journals with a verified APC are available within {formatBudget(budget)}. This does not mean there are no suitable journals; journals that report no APC are checked separately through DOAJ. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding no-APC alternatives...' : 'Find no-APC alternatives'}</button></div>}
+          {noBudgetMatches && <div className="empty">No strong, relevant journal with a verified INR APC satisfies the selected {formatBudget(budget)} budget and quartile. We are not showing weak or unrelated matches. Journals that report no APC are checked separately through DOAJ. <button className="btn btn-small primary-btn" onClick={findVerifiedNoApcJournals} disabled={lowApcLoading}>{lowApcLoading ? 'Finding no-APC alternatives...' : 'Find no-APC alternatives'}</button></div>}
           {lowApcJournals.length > 0 && <section ref={lowApcResultsRef} className="panel low-apc-results"><label className="panel-label">DOAJ-reported no-APC candidates <span className="hint">DOAJ reports no APC for these records. APC policies can change, so verify the publisher policy before submission.</span></label>{lowApcJournals.map((journal) => <div className="lookup-result" key={`${journal.title}-${journal.publisher}`}><div><strong>{journal.title}</strong><span>{journal.publisher} · {journal.subjects.slice(0, 2).join(', ') || 'Subject not listed'}</span></div><div className="lookup-actions">{journal.journalUrl && <a className="btn-small journal-link" href={journal.journalUrl} target="_blank" rel="noreferrer">↗ Website</a>}{journal.apcUrl && <a className="btn-small" href={journal.apcUrl} target="_blank" rel="noreferrer">APC policy</a>}{journal.instructionsUrl && <a className="btn-small" href={journal.instructionsUrl} target="_blank" rel="noreferrer">Instructions</a>}</div></div>)}</section>}
           {noFilteredMatches && <div className="empty">No journals match every selected filter. Try Any quartile, Any indexing, or a broader field. Some catalog journals are unranked and do not have verified APC data.</div>}
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
@@ -1031,18 +1065,24 @@ function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: {
 
 function FormatPanel({ selected, text, visualHtml, onUnlock, onReviewed }: { selected: Journal; text: string; visualHtml: string; onUnlock: () => void; onReviewed: () => void }) {
   const [fixedRules, setFixedRules] = useState<string[]>([]);
-  const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string } | null>(null);
+  const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string; requirements?: { abstract: 'structured' | 'unstructured'; wordLimit: number | null; refStyle: string; figuresTables: boolean | null; supplementaryFiles: boolean | null; declarations: boolean | null } } | null>(null);
   const [fetchingInstructions, setFetchingInstructions] = useState(false);
   const titleMatch = titleFromManuscript(text) || 'Untitled manuscript';
   const abstract = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
   const references = text.match(/references\s*:?[\s\S]*$/i)?.[0] ?? '';
   const hasSections = ['introduction', 'methods', 'results', 'discussion'].every((section) => new RegExp(`(?:^|\\n)\\s*(?:\\d+\\.?\\s*)?${section}\\b`, 'i').test(text));
+  const liveRequirements = liveInstructions?.requirements;
+  const abstractRequirement = liveRequirements?.abstract ?? selected.requirements.abstract;
+  const wordLimit = liveRequirements?.wordLimit ?? selected.requirements.wordLimit;
+  const referenceStyle = liveRequirements?.refStyle ?? selected.requirements.refStyle;
   const rules = [
     { id: 'title', name: 'Title and front matter', source: 'A clear title should appear before the abstract.', detail: titleMatch === 'Untitled manuscript' ? 'No manuscript title was detected.' : 'Title detected and ready for journal formatting.', fixed: titleMatch !== 'Untitled manuscript' },
-    { id: 'abstract', name: 'Abstract structure', source: selected.requirements.abstract === 'structured' ? 'Use Background, Methods, Results, and Conclusion headings.' : 'Provide a concise unstructured abstract before keywords.', detail: abstract ? `${wordCount(abstract)} words detected.` : 'Abstract not detected.', fixed: Boolean(abstract) },
-    { id: 'references', name: 'Reference style', source: `References should follow ${selected.requirements.refStyle} style.`, detail: references ? 'Reference section detected; verify each entry before submission.' : 'Reference section not detected.', fixed: Boolean(references) },
+    { id: 'abstract', name: 'Abstract structure', source: abstractRequirement === 'structured' ? 'Use Background, Methods, Results, and Conclusion headings.' : 'Provide a concise unstructured abstract before keywords.', detail: abstract ? `${wordCount(abstract)} words detected.` : 'Abstract not detected.', fixed: Boolean(abstract) },
+    { id: 'references', name: 'Reference style', source: `References should follow ${referenceStyle} style.`, detail: references ? 'Reference section detected; verify each entry before submission.' : 'Reference section not detected.', fixed: Boolean(references) },
     { id: 'sections', name: 'Section order', source: 'Title, Abstract, Keywords, Introduction, Methods, Results, Discussion, References.', detail: hasSections ? 'Core manuscript sections detected.' : 'One or more core sections are missing.', fixed: hasSections },
-    { id: 'word-limit', name: 'Word limit', source: selected.requirements.wordLimit ? `Stay within ${selected.requirements.wordLimit} words.` : 'No catalog word limit is listed for this journal.', detail: selected.requirements.wordLimit ? `${wordCount(text)} / ${selected.requirements.wordLimit} words.` : 'Confirm the limit in the journal instructions.', fixed: selected.requirements.wordLimit === null || wordCount(text) <= selected.requirements.wordLimit },
+    { id: 'word-limit', name: 'Word limit', source: wordLimit ? `Stay within ${wordLimit} words.` : 'No verified word limit was found in the available instructions.', detail: wordLimit ? `${wordCount(text)} / ${wordLimit} words.` : 'Confirm the limit in the journal instructions.', fixed: wordLimit === null || wordCount(text) <= wordLimit },
+    ...(liveRequirements?.figuresTables ? [{ id: 'figures-tables', name: 'Figures and tables', source: 'Upload figures and tables as separate files if requested.', detail: 'The live instructions mention separate figure/table files.', fixed: false }] : []),
+    ...(liveRequirements?.declarations ? [{ id: 'declarations', name: 'Declarations', source: 'Add funding, competing-interest, ethics, and data-availability statements.', detail: 'The live instructions mention author declarations.', fixed: false }] : []),
   ];
   const openRules = rules.filter((rule) => !rule.fixed && !fixedRules.includes(rule.id));
   const fixRule = (id: string) => {
@@ -1062,8 +1102,8 @@ function FormatPanel({ selected, text, visualHtml, onUnlock, onReviewed }: { sel
     setFetchingInstructions(true);
     try {
       const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(issn)}&title=${encodeURIComponent(selected.name)}`);
-      const payload = await response.json() as { authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string };
-      setLiveInstructions({ url: payload.authorInstructionsUrl || payload.journalUrl || selected.authorInstructionsUrl || selected.submissionUrl || null, source: payload.source || 'Live journal lookup', checkedAt: new Date().toISOString() });
+      const payload = await response.json() as { authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string; instructionSignals?: typeof liveInstructions extends infer T ? T extends { requirements?: infer R } ? R : never : never };
+      setLiveInstructions({ url: payload.authorInstructionsUrl || payload.journalUrl || selected.authorInstructionsUrl || selected.submissionUrl || null, source: payload.source || 'Live journal lookup', checkedAt: new Date().toISOString(), requirements: payload.instructionSignals ?? undefined });
     } catch {
       setLiveInstructions({ url: selected.authorInstructionsUrl || selected.submissionUrl || null, source: 'Catalog record', checkedAt: new Date().toISOString() });
     } finally {
@@ -1120,12 +1160,53 @@ function SubmissionAuthorForm({ authorName, onAuthorName, authorAffiliation, onA
   return <div className="submission-author-form"><div className="panel-label">Author details and declarations</div><div className="submission-form-grid"><label>Corresponding author<input value={authorName} onChange={(event) => onAuthorName(event.target.value)} placeholder="Full name" /></label><label>Affiliation<input value={authorAffiliation} onChange={(event) => onAuthorAffiliation(event.target.value)} placeholder="University, department, country" /></label></div><label>ORCID (optional)<input value={authorOrcid} onChange={(event) => onAuthorOrcid(event.target.value)} placeholder="0000-0000-0000-0000" /></label><label>Funding statement<textarea value={fundingStatement} onChange={(event) => onFundingStatement(event.target.value)} /></label><label>Competing interests<textarea value={conflictStatement} onChange={(event) => onConflictStatement(event.target.value)} /></label><label>Data availability statement<textarea value={dataStatement} onChange={(event) => onDataStatement(event.target.value)} /></label><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div>;
 }
 
+function buildManuscriptDocument(title: string, text: string) {
+  const sections = splitManuscriptSections(text);
+  const children: Array<Paragraph> = [];
+
+  if (title.trim()) {
+    children.push(
+      new Paragraph({
+        text: title.trim(),
+        heading: 'Title',
+        spacing: { after: 180 },
+      }),
+    );
+  }
+
+  sections.forEach((section) => {
+    if (section.name !== 'body' && section.name !== 'title') {
+      children.push(
+        new Paragraph({
+          text: section.name.charAt(0).toUpperCase() + section.name.slice(1),
+          heading: 'Heading1',
+          spacing: { before: 180, after: 80 },
+        }),
+      );
+    }
+
+    section.lines.forEach((line) => {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: line || '' })],
+        }),
+      );
+    });
+  });
+
+  return new Document({
+    sections: [{ children }],
+  });
+}
+
 function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, onUnlock }: { selected: Journal; text: string; title: string; formatDone: boolean; verifyDone: boolean; fixed: string[]; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; onUnlock: () => void }) {
   const [graphicalAbstract, setGraphicalAbstract] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
   const [titlePageStatus, setTitlePageStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
+  const [packageStatus, setPackageStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
   const titleValue = title || titleFromManuscript(text) || 'Add a manuscript title';
   const abstractValue = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() || 'Abstract not detected.';
+  const likelyRequirements = useMemo(() => inferLikelySubmissionRequirements(selected), [selected]);
   const checks = [
     ['Manuscript complete', text.length > 200],
     ['Target journal selected', Boolean(selected)],
@@ -1154,8 +1235,56 @@ function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed,
       setTitlePageStatus('error');
     }
   };
+  const downloadSubmissionPackage = useCallback(async () => {
+    if (packageStatus === 'generating') return;
+    setPackageStatus('generating');
+    try {
+      const titlePage = new Document({ sections: [{ children: [new Paragraph({ text: titleValue, heading: 'Title' }), new Paragraph({ text: authorName || 'Corresponding author not added' }), new Paragraph({ text: authorAffiliation || 'Affiliation not added' }), new Paragraph({ text: authorOrcid ? `ORCID: ${authorOrcid}` : 'ORCID not provided' }), new Paragraph({ text: `Funding: ${fundingStatement}` }), new Paragraph({ text: `Competing interests: ${conflictStatement}` }), new Paragraph({ text: `Data availability: ${dataStatement}` })] }] });
+      const titlePageBlob = await Packer.toBlob(titlePage);
+      const manuscriptDoc = buildManuscriptDocument(titleValue, text);
+      const manuscriptBlob = await Packer.toBlob(manuscriptDoc);
+      const zip = new JSZip();
+      const requirementNotes = [
+        likelyRequirements.titlePage ? 'title page likely required' : 'title page optional',
+        likelyRequirements.coverLetter ? 'cover letter likely expected' : 'cover letter optional',
+        likelyRequirements.graphicalAbstract ? 'graphical abstract likely requested' : 'graphical abstract likely optional',
+      ];
+      zip.file('01-main-manuscript.docx', manuscriptBlob);
+      zip.file('02-title-page.docx', titlePageBlob);
+      if (coverLetter.trim()) zip.file('03-cover-letter.txt', coverLetter.trim());
+      if (graphicalAbstract) zip.file(`04-graphical-abstract-${graphicalAbstract.name}`, await graphicalAbstract.arrayBuffer());
+      zip.file('submission-manifest.txt', [`Journal: ${selected.name}`, `Title: ${titleValue}`, `Files: ${graphicalAbstract ? 'main manuscript.docx, title page.docx, cover letter, graphical abstract' : 'main manuscript.docx, title page.docx, cover letter'}`, `Likely requirements: ${requirementNotes.join('; ')}`, `Generated: ${new Date().toISOString()}`].join('\n'));
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${titleValue.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'submission-package'}-submission-package.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setPackageStatus('ready');
+    } catch {
+      setPackageStatus('error');
+    }
+  }, [authorAffiliation, authorName, authorOrcid, conflictStatement, coverLetter, dataStatement, fundingStatement, graphicalAbstract, likelyRequirements, packageStatus, selected.name, text, titleValue]);
+  useEffect(() => {
+    const files = document.querySelector<HTMLElement>('.submit-files');
+    if (!files) return;
+    let button = files.querySelector<HTMLButtonElement>('.submit-package-button');
+    if (!button) {
+      button = document.createElement('button');
+      button.className = 'btn btn-secondary submit-package-button';
+      button.type = 'button';
+      files.prepend(button);
+    }
+    button.textContent = packageStatus === 'generating' ? 'Preparing package...' : packageStatus === 'ready' ? 'Download package again' : 'Download submission ZIP';
+    button.disabled = packageStatus === 'generating';
+    button.onclick = downloadSubmissionPackage;
+    return () => { button?.remove(); };
+  }, [downloadSubmissionPackage, packageStatus]);
 
-  return <div className="submit-workspace"><div className="submit-preview"><div className="format-page"><div className="format-title">{titleValue}</div><div className="format-meta">Submission package · {selected.name}</div><div className="format-divider" /><h3>Author details</h3><p>{authorName || 'Corresponding author not added'}<br />{authorAffiliation || 'Affiliation not added'}{authorOrcid && <><br />ORCID: {authorOrcid}</>}</p><h3>Abstract</h3><p>{abstractValue}</p><h3>Declarations</h3><p>Funding: {fundingStatement}<br />Conflicts: {conflictStatement}<br />Data: {dataStatement}</p><h3>Additional files</h3><p>{graphicalAbstract ? `Graphical abstract: ${graphicalAbstract.name}` : 'Graphical abstract: not uploaded'}</p></div></div><aside className="submit-rail"><div className="submit-rail-head"><div><strong>Submission package</strong><span>{selected.name}</span></div><span className="verify-count">{complete}/{checks.length}</span></div><div className="submit-checks">{checks.map(([label, done]) => <div className={`submit-check ${done ? 'complete' : 'missing'}`} key={label as string}><span>{done ? '✓' : '!'}</span><strong>{label as string}</strong><em>{done ? 'Complete' : 'Needs attention'}</em></div>)}</div><div className="submit-files"><div className="verify-group-label">Submission files</div><div className="submit-file required"><div><strong>Main manuscript</strong><span>Ready from manuscript editor</span></div><b>Ready</b></div><div className="submit-file recommended"><div><strong>Separate title page</strong><span>Recommended · includes author details and declarations</span></div><button className="btn-small" onClick={downloadTitlePage}>Download DOCX</button></div><label className="submit-file optional"><div><strong>Graphical abstract</strong><span>{selected.oa ? 'Optional unless author instructions require it' : 'Optional · upload if requested by the journal'}</span></div><input type="file" accept="image/png,image/jpeg,image/tiff" onChange={(event) => setGraphicalAbstract(event.target.files?.[0] || null)} /></label><label className="submit-field-label">Cover letter (optional)<textarea value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} placeholder="Add a short cover letter for the editor..." /></label></div><div className="submit-declarations"><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div><div className="submit-actions"><button className="btn btn-success" disabled={!declarationsConfirmed} onClick={() => window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank')}>Open journal portal</button><button className="btn btn-secondary" onClick={onUnlock}>Submission options</button></div></aside></div>;
+  return <div className="submit-workspace"><div className="submit-preview"><div className="format-page"><div className="format-title">{titleValue}</div><div className="format-meta">Submission package · {selected.name}</div><div className="format-divider" /><h3>Author details</h3><p>{authorName || 'Corresponding author not added'}<br />{authorAffiliation || 'Affiliation not added'}{authorOrcid && <><br />ORCID: {authorOrcid}</>}</p><h3>Abstract</h3><p>{abstractValue}</p><h3>Declarations</h3><p>Funding: {fundingStatement}<br />Conflicts: {conflictStatement}<br />Data: {dataStatement}</p><h3>Likely journal extras</h3><p>{likelyRequirements.notes.join(' ')}</p><h3>Additional files</h3><p>{graphicalAbstract ? `Graphical abstract: ${graphicalAbstract.name}` : 'Graphical abstract: not uploaded'}</p></div></div><aside className="submit-rail"><div className="submit-rail-head"><div><strong>Submission package</strong><span>{selected.name}</span></div><span className="verify-count">{complete}/{checks.length}</span></div><div className="submit-checks">{checks.map(([label, done]) => <div className={`submit-check ${done ? 'complete' : 'missing'}`} key={label as string}><span>{done ? '✓' : '!'}</span><strong>{label as string}</strong><em>{done ? 'Complete' : 'Needs attention'}</em></div>)}</div><div className="submit-files"><div className="verify-group-label">Submission files</div><div className="submit-file required"><div><strong>Main manuscript</strong><span>Ready from manuscript editor</span></div><b>Ready</b></div><div className="submit-file recommended"><div><strong>Separate title page</strong><span>Recommended · includes author details and declarations</span></div><button className="btn-small" onClick={downloadTitlePage}>Download DOCX</button></div><label className="submit-file optional"><div><strong>Graphical abstract</strong><span>{selected.oa ? 'Optional unless author instructions require it' : 'Optional · upload if requested by the journal'}</span></div><input type="file" accept="image/png,image/jpeg,image/tiff" onChange={(event) => setGraphicalAbstract(event.target.files?.[0] || null)} /></label><label className="submit-field-label">Cover letter (optional)<textarea value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} placeholder="Add a short cover letter for the editor..." /></label></div><div className="submit-declarations"><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div><div className="submit-actions"><button className="btn btn-success" disabled={!declarationsConfirmed} onClick={() => window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank')}>Open journal portal</button><button className="btn btn-secondary" onClick={onUnlock}>Submission options</button></div></aside></div>;
 }
 
 function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal, nextStep?: number) => void }) {
