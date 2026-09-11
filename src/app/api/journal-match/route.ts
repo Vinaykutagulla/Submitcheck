@@ -103,6 +103,7 @@ export async function POST(request: Request) {
     const broadQuery = await buildQuery(false);
     if (broadQuery.error) throw broadQuery.error;
     const candidateRows = [...(keywordQuery.data ?? []), ...(broadQuery.data ?? [])];
+    console.log(`[DEBUG] keywordQuery: ${keywordQuery.data?.length ?? 0} | broadQuery: ${broadQuery.data?.length ?? 0} | total: ${candidateRows.length}`);
     const rowsById = new Map<string, (typeof candidateRows)[number]>();
     for (const row of candidateRows) {
       rowsById.set(String(row.id), row);
@@ -153,6 +154,7 @@ export async function POST(request: Request) {
       access: body.access === 'Open Access' || body.access === 'Subscription' || body.access === 'Hybrid' ? body.access : undefined,
     });
     let rankedJournals = rankJournals(body.manuscriptText, filterResult.results, semanticProfile);
+    console.log(`[DEBUG] filterJournals: ${filterResult.results.length} passed | rankJournals: ${rankedJournals.length} scored | top score: ${rankedJournals[0]?.match.score}`);
     let excludedForMissingData = filterResult.excludedForMissingData;
     if (maxBudget !== null) {
       const catalogMatches = rankedJournals.filter(({ journal }) => {
@@ -213,6 +215,7 @@ export async function POST(request: Request) {
         && Boolean(match.topicalEvidence)
         && !match.warnings.some((warning) => warning.includes('secondary topic')))
       .map((entry) => ({ ...entry, match: { ...entry.match, matchSource: 'deterministic-fallback' as const } }));
+    console.log(`[DEBUG] deterministicMatches filtered: ${deterministicMatches.length} from ${rankedJournals.length}`);
     const matches = (aiAvailable
       ? judgedRanked.filter(({ match, judgeScore, judgeExclusions }) => match.score >= 55 && (judgeScore ?? 0) >= 65 && Boolean(match.directEvidence) && judgeExclusions.length === 0)
       : deterministicMatches)
