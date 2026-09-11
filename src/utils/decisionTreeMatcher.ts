@@ -132,6 +132,10 @@ export const topicFamilies: Record<string, string[]> = {
   'male infertility': ['male infertility', 'spermatozoa', 'sperm function', 'sperm quality', 'sperm dna fragmentation', 'semen', 'male reproductive', 'reproductive dysfunction'],
   'reproductive medicine': ['reproductive medicine', 'andrology', 'infertility', 'fertility', 'semen analysis', 'sperm', 'reproductive tract'],
   biomarkers: ['biomarker', 'biomarkers', 'diagnostic biomarker', 'diagnostic biomarkers', 'dna fragmentation assay'],
+  obstetrics: ['obstetric', 'obstetrics', 'caesarean section', 'cesarean section', 'lower segment caesarean', 'lower segment cesarean', 'labour induction', 'labor induction', 'maternal outcome', 'neonatal outcome', 'pregnancy', 'childbirth', 'delivery'],
+  'clinical audit': ['clinical audit', 'obstetric audit', 'audit of', 'quality improvement', 'institutional audit', 'hospital audit'],
+  'Robson classification': ['robson classification', 'robson ten-group', 'robson ten group', 'robson tgcs', 'ten-group classification', 'ten group classification'],
+  'maternal and neonatal health': ['maternal health', 'maternal morbidity', 'maternal mortality', 'neonatal outcome', 'neonatal morbidity', 'nicu admission', 'breastfeeding initiation'],
   'analytical profiling': ['lc-ms', 'lc-esi', 'qtof', 'hrms', 'metabolite profiling', 'mass spectrometry'],
   'molecular pharmacology': ['protein-ligand', 'molecular docking', 'molecular dynamics', 'binding affinity', 'admet', 'drug-likeness'],
   'drug delivery': ['drug delivery', 'nanomedicine', 'nanoparticle', 'release', 'formulation'],
@@ -232,11 +236,11 @@ export function profileManuscript(text: string): ManuscriptProfile {
     ? 'Research'
     : /case report|case study|single patient/.test(lower)
       ? 'Case study'
-      : /protocol|benchmark|dataset|software package/.test(lower)
+        : /(?:^|\n)\s*(?:protocol|benchmark|dataset|software package)\b|\b(?:protocol study|methods paper|benchmark study|dataset paper)\b/.test(lower)
         ? 'Methods'
         : /review|systematic review|meta-analysis|literature search/.test(lower)
           ? 'Review'
-          : /methods|participants|sample size|experiment|we conducted/.test(lower)
+          : /participants|sample size|experiment|we conducted|retrospective|cross-sectional|clinical audit/.test(lower)
           ? 'Research'
           : 'Unknown';
   const topicScores = Object.fromEntries(Object.entries(topicFamilies).map(([topic, terms]) => [
@@ -303,7 +307,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const directEvidence = topicalEvidence || (matchingMethods.length > 0 && matchingTopics.length > 0);
   const profileIdentityText = `${profile.topics.join(' ')} ${profile.keywords.join(' ')}`;
   const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
-  const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory/.test(journalText);
+  const biomedicalJournal = /pharmacol|pharmaceutical|immunolog|toxicolog|biochem|molecular biology|medicinal chemistry|drug|medicine|clinical|natural product|plant science|food science|life science|therapeutic|anti-inflammatory|obstetric|gynecolog|reproductive|pregnancy|childbirth|maternal|neonatal/.test(journalText);
   const biomedicalProfile = profile.topics.some((topic) => ['pharmacology', 'natural products', 'molecular pharmacology', 'analytical profiling'].includes(topic)) || profile.field === 'Life Sciences' || profile.field === 'Medicine';
   const crossDomainTopicFit = matchingTopics.length > 0 && !biomedicalProfile;
   const nonBiomedicalJournalMismatch = biomedicalProfile
