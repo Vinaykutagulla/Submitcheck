@@ -674,7 +674,7 @@ export default function Home() {
         setRemoteMatches(normalizedMatches);
         nextMatches = normalizedMatches;
         if (result.fallbackUsed) {
-          setSaveMessage('Basic matches shown because AI journal review is unavailable. Results use a stricter evidence threshold.');
+          setSaveMessage('Strict catalog matches shown. AI review was unavailable for this manuscript, so weaker matches were excluded.');
         }
       } else {
         setRemoteMatches([]);
