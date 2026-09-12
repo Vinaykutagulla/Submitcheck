@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "evaluate:matcher": "tsx scripts/evaluate-matcher.ts",
+    "evaluate:fixtures": "tsx fixtures/runMetrics.ts",
+    "test:fixtures": "tsx fixtures/runMetrics.ts --assert",
     "lint": "eslint",
     "import:journals": "node scripts/import-scopus.js",
     "import:scimago": "node scripts/import-scimago.js",
@@ -33,6 +36,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }
