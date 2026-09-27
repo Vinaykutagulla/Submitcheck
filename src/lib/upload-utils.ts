@@ -11,6 +11,10 @@ export type ExtractedManuscript = {
 function normalizeWhitespace(value: string): string {
   return value
     .replace(/\u00A0/g, ' ')
+    // Some source documents splice periods into the middle of words with no surrounding
+    // whitespace ("compu.ting", "archit.ecture") - seen from AI-detector-evasion tooling. A
+    // real sentence-ending period is always followed by whitespace, so this is always safe.
+    .replace(/([a-zA-Z])\.(?=[a-zA-Z])/g, '$1')
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/[ \t]+/g, ' ').trim())

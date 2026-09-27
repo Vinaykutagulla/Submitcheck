@@ -251,6 +251,15 @@ function normalizePhrase(value: string) {
     .trim();
 }
 
+// Some manuscripts contain periods spliced into the middle of words with no surrounding
+// whitespace ("compu.ting", "archit.ecture") - seen from AI-detector-evasion tooling that
+// inserts near-invisible characters to break up n-grams. A real sentence-ending period is
+// always followed by whitespace or the end of the text, so a period sitting directly between
+// two letters is never a real sentence break; removing it restores the actual words.
+function descrambleMidWordPunctuation(value: string): string {
+  return value.replace(/([a-zA-Z])\.(?=[a-zA-Z])/g, '$1');
+}
+
 function hasWholeWord(text: string, term: string) {
   const normalizedText = normalizePhrase(text);
   const normalizedTerm = normalizePhrase(term);
@@ -313,6 +322,7 @@ function extractKeywords(text: string) {
 }
 
 export function profileManuscript(text: string): ManuscriptProfile {
+  text = descrambleMidWordPunctuation(text);
   const analysisText = getAnalysisText(text);
   const lower = analysisText.toLowerCase();
   const frontMatter = getManuscriptSignalText(text);
