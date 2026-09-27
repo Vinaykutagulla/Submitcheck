@@ -14,6 +14,7 @@ export default function AppWorkflowPage() {
   const [signedIn, setSignedIn] = useState(false);
   const [plan, setPlan] = useState<'free' | 'pro'>('free');
   const [account, setAccount] = useState<Account | null>(null);
+  const [showPricing, setShowPricing] = useState(false);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -64,13 +65,60 @@ export default function AppWorkflowPage() {
   }
 
   if (!signedIn) {
-    return <main className="jmatch-shell"><header className="letterhead"><div className="letterhead-inner"><div><div className="brand"><span className="stamp">✓</span><h1>Submit<em>Check</em></h1></div><p className="tagline">Author workspace</p></div></div></header><div className="wrap"><section className="panel dashboard-empty"><div className="panel-label">Private author workspace</div><h2>Sign in to view your research desk</h2><p>Your manuscripts, saved journal matches, and revision progress are private to your account.</p><Link href="/login" className="btn btn-primary">Log in</Link></section></div></main>;
+    return <main className="jmatch-shell"><header className="letterhead"><div className="letterhead-inner"><div><div className="brand"><div className="brand-mark" aria-label="SubmitCheck logo"><svg viewBox="0 0 250 220" aria-hidden="true" role="img"><defs><linearGradient id="submitcheck-mark-blue" x1="0%" x2="100%" y1="0%" y2="100%"><stop offset="0%" stopColor="#1b5dc9" /><stop offset="100%" stopColor="#0d3d8f" /></linearGradient></defs><path d="M52 18h98l52 52v104a20 20 0 0 1-20 20H72a20 20 0 0 1-20-20V38a20 20 0 0 1 20-20z" fill="#f5f8fd" stroke="url(#submitcheck-mark-blue)" strokeWidth="6" /><path d="M150 18v48h48" fill="none" stroke="#114ea9" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" /><path d="M82 82h68M82 102h84M82 122h62" fill="none" stroke="#bfd4f7" strokeWidth="10" strokeLinecap="round" /><circle cx="152" cy="170" r="42" fill="url(#submitcheck-mark-blue)" /><circle cx="152" cy="170" r="28" fill="rgba(255,255,255,0.12)" /><path d="M132 170l15 15 32-36" fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" /></svg></div><div className="brand-wordmark">Submit<em>Check</em></div></div><p className="tagline">Author workspace</p></div></div></header><div className="wrap"><section className="panel dashboard-empty"><div className="panel-label">Private author workspace</div><h2>Sign in to view your research desk</h2><p>Your manuscripts, saved journal matches, and revision progress are private to your account.</p><Link href="/login" className="btn btn-primary">Log in</Link></section></div></main>;
   }
 
   return (
-    <main className="jmatch-shell"><header className="letterhead"><div className="letterhead-inner"><div><div className="brand"><span className="stamp">✓</span><h1>Submit<em>Check</em></h1></div><p className="tagline">Get submission-ready. Get closer to acceptance.</p></div><div className="header-actions"><div className="plan-actions"><span className={plan === 'pro' ? 'plan-pill pro' : 'plan-pill'}>{plan === 'pro' ? '⭐ Pro plan' : '🔓 Free plan'}</span><Link href="/" className="btn btn-gold">+ New manuscript</Link></div><div className="author-chip"><strong>{account?.fullName || 'Author'}</strong><span>{account?.email}</span></div></div></div></header><div className="wrap">
+    <main className="jmatch-shell"><header className="letterhead"><div className="letterhead-inner"><div><div className="brand"><div className="brand-mark" aria-label="SubmitCheck logo"><svg viewBox="0 0 250 220" aria-hidden="true" role="img"><defs><linearGradient id="submitcheck-mark-blue" x1="0%" x2="100%" y1="0%" y2="100%"><stop offset="0%" stopColor="#1b5dc9" /><stop offset="100%" stopColor="#0d3d8f" /></linearGradient></defs><path d="M52 18h98l52 52v104a20 20 0 0 1-20 20H72a20 20 0 0 1-20-20V38a20 20 0 0 1 20-20z" fill="#f5f8fd" stroke="url(#submitcheck-mark-blue)" strokeWidth="6" /><path d="M150 18v48h48" fill="none" stroke="#114ea9" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" /><path d="M82 82h68M82 102h84M82 122h62" fill="none" stroke="#bfd4f7" strokeWidth="10" strokeLinecap="round" /><circle cx="152" cy="170" r="42" fill="url(#submitcheck-mark-blue)" /><circle cx="152" cy="170" r="28" fill="rgba(255,255,255,0.12)" /><path d="M132 170l15 15 32-36" fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" /></svg></div><div className="brand-wordmark">Submit<em>Check</em></div></div><p className="tagline">Get submission-ready. Get closer to acceptance.</p></div><div className="header-actions"><div className="plan-actions"><span className={plan === 'pro' ? 'plan-pill pro' : 'plan-pill'}>{plan === 'pro' ? '⭐ Pro plan' : '🔓 Free plan'}</span><Link href="/" className="btn btn-gold">+ New manuscript</Link></div><div className="author-chip"><strong>{account?.fullName || 'Author'}</strong><span>{account?.email}</span></div></div></div></header><div className="wrap">
 
-        <section className="dashboard-hero"><div><div className="eyebrow">SubmitCheck / Workspace</div><h2>Hi, {account?.fullName || 'Author'}</h2><p>Your private place for manuscripts, journal shortlists, and revision decisions.</p></div><Link href="/" className="btn btn-primary">Find a journal →</Link>
+        <section className="dashboard-hero hero-landing">
+          <div className="hero-copy">
+            <div className="eyebrow">SubmitCheck / Workspace</div>
+            <h2>Turn a draft into a publishable submission.</h2>
+            <p>Match the right journal, close editorial gaps, and package a submission-ready manuscript in one calm, guided workflow.</p>
+            <div className="hero-actions">
+              <Link href="/" className="btn btn-primary">Start matching</Link>
+              <button className="btn btn-secondary" onClick={() => setShowPricing(true)}>Unlock Pro</button>
+            </div>
+            <div className="hero-microcopy" aria-label="Key features">
+              <span>✔ Fit scoring</span>
+              <span>✔ Gap checks</span>
+              <span>✔ Submission kit</span>
+            </div>
+          </div>
+
+          <div className="hero-panel" aria-label="Submission overview panel">
+            <div className="hero-panel-top">
+              <span className="tiny-badge">Submission Radar</span>
+              <span className="tiny-status"><i /> Live</span>
+            </div>
+
+            <div className="hero-card">
+              <div className="hero-card-row">
+                <span>Best fit</span>
+                <strong>94%</strong>
+              </div>
+              <div className="hero-card-row muted-row">
+                <span>Target range</span>
+                <strong>Q1–Q2</strong>
+              </div>
+              <div className="hero-card-row muted-row">
+                <span>Editorial gaps</span>
+                <strong>08</strong>
+              </div>
+            </div>
+
+            <div className="hero-mini-stack">
+              <div className="mini-metric">
+                <small>Journal match</small>
+                <strong>Journal of Controlled Release</strong>
+              </div>
+              <div className="mini-metric alt">
+                <small>Submission readiness</small>
+                <strong>Ready in 3 steps</strong>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className="dashboard-stats">

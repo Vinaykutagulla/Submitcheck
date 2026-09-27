@@ -945,7 +945,25 @@ export default function Home() {
       <header className="letterhead">
         <div className="letterhead-inner">
           <div>
-            <div className="brand"><span className="stamp">✓</span><h1>Submit<em>Check</em></h1></div>
+            <div className="brand">
+              <div className="brand-mark" aria-label="SubmitCheck logo">
+                <svg viewBox="0 0 250 220" aria-hidden="true" role="img">
+                  <defs>
+                    <linearGradient id="submitcheck-mark-blue" x1="0%" x2="100%" y1="0%" y2="100%">
+                      <stop offset="0%" stopColor="#1b5dc9" />
+                      <stop offset="100%" stopColor="#0d3d8f" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M52 18h98l52 52v104a20 20 0 0 1-20 20H72a20 20 0 0 1-20-20V38a20 20 0 0 1 20-20z" fill="#f5f8fd" stroke="url(#submitcheck-mark-blue)" strokeWidth="6" />
+                  <path d="M150 18v48h48" fill="none" stroke="#114ea9" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M82 82h68M82 102h84M82 122h62" fill="none" stroke="#bfd4f7" strokeWidth="10" strokeLinecap="round" />
+                  <circle cx="152" cy="170" r="42" fill="url(#submitcheck-mark-blue)" />
+                  <circle cx="152" cy="170" r="28" fill="rgba(255,255,255,0.12)" />
+                  <path d="M132 170l15 15 32-36" fill="none" stroke="#fff" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div className="brand-wordmark">Submit<em>Check</em></div>
+            </div>
             <p className="tagline">Get submission-ready. Get closer to acceptance.</p>
           </div>
           <div className="header-actions">
