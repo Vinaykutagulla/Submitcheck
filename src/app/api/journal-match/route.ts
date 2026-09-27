@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { bandForScore, confidenceForMatch, filterJournals, profileManuscript, rankJournals, topicFamilies } from '@/utils/decisionTreeMatcher';
+import { bandForScore, confidenceForMatch, filterJournals, profileManuscript, rankJournals, topicFamilies, type MatchJournal } from '@/utils/decisionTreeMatcher';
 import { lookupLiveApc } from '@/lib/journal-apc';
 import { parseApcInr } from '@/lib/apc';
 import { createSemanticProfile, judgeJournalCandidates } from '@/lib/semantic-profile';
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
 
     const supabase = getAdminClient();
     if (!supabase) {
-      const fallbackRanked = rankJournals(body.manuscriptText, fallbackJournals as any, semanticProfile);
+      const fallbackRanked = rankJournals(body.manuscriptText, fallbackJournals as unknown as MatchJournal[], semanticProfile);
       const matches = fallbackRanked
         .filter(({ match }) => match.band !== null && Boolean(match.directEvidence) && Boolean(match.topicalEvidence))
         .slice(0, 25)
