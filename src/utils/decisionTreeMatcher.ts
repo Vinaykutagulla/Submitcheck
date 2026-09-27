@@ -394,6 +394,7 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const journalFields = [journal.field, ...asjcFields].map(normalizeScopusField);
   const journalText = `${journal.name} ${journal.publisher ?? ''} ${journal.field} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
   const journalIdentityText = `${journal.name} ${journal.publisher ?? ''} ${journal.scope.join(' ')} ${(journal.asjcCodes ?? []).join(' ')}`.toLowerCase();
+  const journalScopeText = journal.scope.join(' ').toLowerCase();
   const journalFieldText = journal.field.toLowerCase();
   const journalSpecialtyText = `${journal.name} ${journal.field} ${journal.scope.join(' ')}`.toLowerCase();
   const semanticText = semanticProfile ? [semanticProfile.researchQuestion, semanticProfile.studyDesign, ...semanticProfile.subjectArea, ...semanticProfile.populationOrMaterial, ...semanticProfile.interventions, ...semanticProfile.methods, ...semanticProfile.outcomes, semanticProfile.articleType].join(' ').toLowerCase() : '';
@@ -444,7 +445,13 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     && !/drug delivery|nanomedicine|nanoparticle|formulation|controlled release|sustained release|pharmaceutical technology/.test(journalSpecialtyText);
   const incidentalNeighborPenalty = matchingTopics.length === 0 && profile.topics.length > 0 && dominantTopicScore <= 2 && (journal.field !== profile.field || journal.field === 'Multidisciplinary');
   const hasDirectTopicEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0 || matchingMethods.length > 0;
-  const sameField = journalFields.includes(normalizeScopusField(profile.field));
+  // asjc_codes (numeric ASJC codes) is empty for ~95% of the catalog, so the intended
+  // narrow-label-to-canonical-field bridge (fieldsForAsjcCodes) silently does nothing for
+  // most journals. Fall back to checking whether the journal's own scope tags contain the
+  // manuscript field's defining vocabulary (e.g. scope includes "Pharmacology" even when
+  // journal.field is the narrower label "Drug Discovery").
+  const fieldSignalScopeMatch = fieldSignals[profile.field]?.some((term) => hasWholeWord(journalScopeText, term)) ?? false;
+  const sameField = journalFields.includes(normalizeScopusField(profile.field)) || fieldSignalScopeMatch;
   const sameFieldWithoutDirectEvidence = sameField && !hasDirectTopicEvidence;
   const multidisciplinaryWithoutDirectEvidence = journal.field === 'Multidisciplinary' && !hasDirectTopicEvidence;
   const fieldFit = sameFieldWithoutDirectEvidence
