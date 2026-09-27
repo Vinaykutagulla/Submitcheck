@@ -422,7 +422,17 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const specificTopicMatches = matchingTopics.filter((topic) => !broadTopicNames.has(topic));
   const dominantTopic = profile.topics[0];
   const dominantTopicScore = dominantTopic ? profile.topicScores[dominantTopic] ?? 0 : 0;
-  const dominantTopicMatched = Boolean(dominantTopic && matchingTopics.includes(dominantTopic));
+  // Manuscripts routinely score on several closely-related topic-family subdivisions at once
+  // (e.g. "male infertility" / "reproductive medicine" / "oxidative stress" for the same paper).
+  // Only checking topics[0] punished journals that matched a substantial secondary topic as if
+  // it were off-topic. A topic only counts as "closely related" when it's backed by a
+  // substantial score of its own (not a stray/incidental hit) and isn't a small fraction of the
+  // dominant topic's score - this keeps weak secondary matches (e.g. a negated phrase) penalized.
+  const closelyRelatedTopics = [dominantTopic, ...profile.topics.filter((topic) => {
+    const score = profile.topicScores[topic] ?? 0;
+    return score >= 6 && score >= dominantTopicScore * 0.4;
+  })].filter((topic): topic is string => Boolean(topic));
+  const dominantTopicMatched = Boolean(dominantTopic && matchingTopics.some((topic) => closelyRelatedTopics.includes(topic)));
   const matchingMethods = profile.methods.filter((method) => hasWholeWord(journalIdentityText, method));
   const topicalEvidence = specificTopicMatches.length > 0 || matchingKeywords.length > 0;
   const directEvidence = topicalEvidence || (matchingMethods.length > 0 && matchingTopics.length > 0);
