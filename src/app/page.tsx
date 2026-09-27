@@ -971,7 +971,7 @@ export default function Home() {
 
         {step === 1 && <>
           <section className="panel">
-            <label className="panel-label">Tell us about your manuscript <span className="hint">For the most accurate journal recommendations, include Title, Abstract, Keywords, Methods, Results, and References.</span></label>
+            <label className="panel-label">Tell us about your manuscript <span className="hint">{inputMode === 'sections' ? 'Title and abstract give a strong match on their own — add keywords for extra precision.' : 'For the most accurate recommendations, include your Abstract, Methods, Results, and References, not just the title.'}</span></label>
             <div className="row" style={{ marginBottom: '16px' }}>
               <button type="button" className={inputMode === 'sections' ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => setInputMode('sections')}>Title, abstract &amp; keywords</button>
               <button type="button" className={inputMode === 'full' ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => setInputMode('full')}>Upload or paste full manuscript</button>
