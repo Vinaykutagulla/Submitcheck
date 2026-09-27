@@ -593,9 +593,28 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     && matchingKeywords.length > 0;
   const technicalLanguageSignals = /(?:parser|parsing|compiler|compilers|typed language|programming language|formal grammar|grammar formalism|syntax tree|parse tree|abstract syntax|type-directed|compiler-checked|lexer|tokenizer|type system)/i;
   const technicalLanguageManuscript = technicalLanguageSignals.test(profileIdentityText);
-  const humanitiesTechnicalMismatch = journal.field === 'Arts and Humanities'
-    && technicalLanguageManuscript
-    && !profile.topics.some((topic) => ['history', 'historical studies', 'literature', 'literary studies', 'philosophy', 'ethics'].includes(topic));
+  // Generic words like "historical" ("historical data" in data engineering) or "semantics"
+  // ("stream-processing semantics") can make the bag-of-words topic classifier itself think a
+  // technical manuscript is about history/linguistics - which then defeats a topics-based
+  // exclusion check. When an AI-extracted semantic profile is available, its subject-area
+  // text is a more reliable, context-aware signal than the deterministic topic list, so use it
+  // independently rather than requiring the (possibly already-wrong) topics to agree.
+  const semanticProfileSubjectText = semanticProfile
+    ? [semanticProfile.researchQuestion, semanticProfile.studyDesign, ...semanticProfile.subjectArea, ...semanticProfile.methods].join(' ').toLowerCase()
+    : '';
+  const semanticHumanitiesEvidence = /histor|literar|literature|philosoph|linguistic|philology|archival|ethnograph|rhetoric/.test(semanticProfileSubjectText);
+  const semanticContradictsHumanities = Boolean(semanticProfile) && semanticProfileSubjectText.length > 0 && !semanticHumanitiesEvidence;
+  // Real catalog rows almost never store the literal string "Arts and Humanities" as
+  // journal.field - they use narrow ASJC-style labels instead ("History", "Linguistics and
+  // Language", "Philosophy"). Recognize those the same way sameField/fieldSignalScopeMatch do.
+  const journalIsArtsAndHumanities = journal.field === 'Arts and Humanities'
+    || journalFields.includes('arts and humanities')
+    || fieldSignals['Arts and Humanities'].some((term) => hasWholeWord(journalScopeText, term) || hasWholeWord(journalFieldText, term));
+  const humanitiesTechnicalMismatch = journalIsArtsAndHumanities
+    && (
+      (technicalLanguageManuscript && !profile.topics.some((topic) => ['history', 'historical studies', 'literature', 'literary studies', 'philosophy', 'ethics'].includes(topic)))
+      || semanticContradictsHumanities
+    );
   if (sameFieldDirectEvidence) {
     score = Math.max(score, 30);
     reasons.push('Same-field direct evidence preserves this journal as a viable match');
