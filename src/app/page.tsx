@@ -4,7 +4,7 @@ import { Document, InsertedTextRun, Packer, Paragraph, TextRun } from 'docx';
 import JSZip from 'jszip';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parseUploadedManuscript } from '@/lib/upload-utils';
-import { profileManuscript, rankJournals, topicFamilies, type Quartile } from '@/utils/decisionTreeMatcher';
+import { profileManuscript, rankJournals, topicFamilies, type JournalMatchResult, type Quartile } from '@/utils/decisionTreeMatcher';
 import { SubmissionField } from '@/components/SubmissionField';
 
 declare global {
@@ -84,6 +84,19 @@ const maximumBudget = 500000;
 
 function formatBudget(value: number) {
   return `₹${value.toLocaleString('en-IN')}`;
+}
+
+function composeSectionsText(abstractValue: string, keywordsValue: string) {
+  const parts: string[] = [];
+  if (abstractValue.trim()) parts.push(`Abstract: ${abstractValue.trim()}`);
+  if (keywordsValue.trim()) parts.push(`Keywords: ${keywordsValue.trim()}`);
+  return parts.join('\n\n');
+}
+
+function extractSectionsFromText(value: string): { abstract: string; keywords: string } {
+  const abstractMatch = value.match(/(?:^|\n)\s*abstract\s*:?[ \t]*\n?([\s\S]*?)(?=\n\s*keywords?\b|\n\s*(?:introduction|1\.?\s+introduction)\b|$)/i);
+  const keywordsMatch = value.match(/(?:^|\n)\s*keywords?\s*:?\s*([^\n]+)/i);
+  return { abstract: abstractMatch?.[1]?.trim() ?? '', keywords: keywordsMatch?.[1]?.trim() ?? '' };
 }
 
 function inferDraftAnchor(title: string) {
@@ -415,6 +428,9 @@ export default function Home() {
   const [manuscriptVisualHtml, setManuscriptVisualHtml] = useState('');
   const embeddedMedia: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> = [];
   const [title, setTitle] = useState('');
+  const [abstract, setAbstract] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [inputMode, setInputMode] = useState<'sections' | 'full'>('sections');
   const [field, setField] = useState('Any field');
   const [indexing, setIndexing] = useState('Any indexing');
   const [indexStats, setIndexStats] = useState<Array<{ name: string; count: number }>>([]);
@@ -441,7 +457,7 @@ export default function Home() {
   const [declarationsConfirmed, setDeclarationsConfirmed] = useState(false);
   const [copiedSubmissionField, setCopiedSubmissionField] = useState('');
   const [showPricing, setShowPricing] = useState(false);
-  const [remoteMatches, setRemoteMatches] = useState<Array<{ journal: Journal; match: { score: number; confidence: 'High' | 'Medium' | 'Low'; matchSource?: 'ai-semantic' | 'deterministic-fallback'; reasons: string[]; warnings: string[] }; gaps: ReturnType<typeof getGaps> }> | null>(null);
+  const [remoteMatches, setRemoteMatches] = useState<Array<{ journal: Journal; match: JournalMatchResult; gaps: ReturnType<typeof getGaps> }> | null>(null);
   const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -570,8 +586,12 @@ export default function Home() {
       .then(async (response) => {
         const payload = await response.json() as { manuscript?: { id: string; title: string; raw_text: string }; error?: string };
         if (!response.ok || !payload.manuscript) throw new Error(payload.error || 'Unable to reopen manuscript.');
+        const sections = extractSectionsFromText(payload.manuscript.raw_text);
         setTitle(payload.manuscript.title);
         setText(payload.manuscript.raw_text);
+        setInputMode('full');
+        setAbstract(sections.abstract);
+        setKeywords(sections.keywords);
         setActiveManuscriptId(payload.manuscript.id);
         setRemoteMatches(null);
         setSelected(null);
@@ -590,8 +610,12 @@ export default function Home() {
 
     try {
       const extracted = await parseUploadedManuscript(file);
+      const sections = extractSectionsFromText(extracted.text);
       setTitle(extracted.title);
       setText(extracted.text);
+      setInputMode('full');
+      setAbstract(sections.abstract);
+      setKeywords(sections.keywords);
       setManuscriptVisualHtml(extracted.visualHtml || '');
       setRemoteMatches(null);
       setSelected(null);
@@ -658,12 +682,18 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ manuscriptText, field: nextField, indexing: nextIndexing, quartile: nextQuartile, budget: nextBudget || null }),
       });
-      const result = await response.json() as { source?: string; matches?: typeof remoteMatches; fallbackUsed?: boolean };
-      if (result.source === 'supabase' && result.matches) {
+      const result = await response.json() as {
+        source?: string;
+        matches?: typeof remoteMatches;
+        fallbackUsed?: boolean;
+        error?: string;
+      };
+      const resultMatches = Array.isArray(result.matches) ? result.matches : [];
+      if (resultMatches.length || result.source === 'demo' || result.source === 'supabase') {
         const nucleicAcidFocus = /\b(?:nucleic acid|rna|mrna|mirna|sirna|dna|crispr|oligonucleotide|transcriptom|gene expression)\b/i.test(manuscriptText);
         const educationFocus = /\b(?:education|teaching|classroom|curriculum|pedagog|student|school)\b/i.test(manuscriptText);
-        const normalizedMatches = result.matches
-          .filter(({ journal, match }) => match.score >= 28
+        const normalizedMatches = resultMatches
+          .filter(({ journal, match }) => match.band !== null
             && !(/\bnucleic acids?\b/i.test(journal.name) && !nucleicAcidFocus)
             && !(match.reasons.some((reason) => /topic overlap: education|keyword overlap: acid/i.test(reason)) && !educationFocus))
           .map(({ journal, match }) => ({
@@ -675,10 +705,12 @@ export default function Home() {
         nextMatches = normalizedMatches;
         if (result.fallbackUsed) {
           setSaveMessage('Strict catalog matches shown. AI review was unavailable for this manuscript, so weaker matches were excluded.');
+        } else {
+          setSaveMessage('');
         }
       } else {
         setRemoteMatches([]);
-        setSaveMessage('Unable to retrieve the journal catalog. Please try matching again.');
+        setSaveMessage(result.error || 'Unable to retrieve the journal catalog. Please try matching again.');
       }
     } catch {
       setRemoteMatches([]);
@@ -939,7 +971,11 @@ export default function Home() {
 
         {step === 1 && <>
           <section className="panel">
-            <label className="panel-label">Paste your manuscript <span className="hint">For the most accurate journal recommendations, include Title, Abstract, Keywords, Methods, Results, and References.</span></label>
+            <label className="panel-label">Tell us about your manuscript <span className="hint">For the most accurate journal recommendations, include Title, Abstract, Keywords, Methods, Results, and References.</span></label>
+            <div className="row" style={{ marginBottom: '16px' }}>
+              <button type="button" className={inputMode === 'sections' ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => setInputMode('sections')}>Title, abstract &amp; keywords</button>
+              <button type="button" className={inputMode === 'full' ? 'btn btn-primary' : 'btn btn-secondary'} onClick={() => setInputMode('full')}>Upload or paste full manuscript</button>
+            </div>
             <div className="row" style={{ marginBottom: '12px' }}>
               <input
                 className="editor"
@@ -948,17 +984,43 @@ export default function Home() {
                 placeholder="Manuscript title"
                 style={{ flex: 1, marginRight: 12, minHeight: '44px' }}
               />
-              <label className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', margin: 0 }}>
+              {inputMode === 'full' && <label className="btn btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', margin: 0 }}>
                 {uploading ? 'Reading file...' : 'Upload file'}
                 <input type="file" accept=".pdf,.docx,.txt" hidden onChange={handleUploadFile} />
-              </label>
+              </label>}
             </div>
-            <label className="upload-area"><span className="upload-icon">📄</span><strong>Drop your manuscript here</strong><span>PDF, DOCX, or TXT · Max 10MB</span><input type="file" accept=".pdf,.docx,.txt" onChange={handleUploadFile} /></label>
-            <div className="or-divider">or paste text</div>
-            <textarea className="editor" value={text} onChange={(event) => { setText(event.target.value); setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]); }} placeholder="Paste your full manuscript here..." />
+            {inputMode === 'sections' ? <>
+              <textarea
+                className="editor"
+                value={abstract}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setAbstract(value);
+                  setText(composeSectionsText(value, keywords));
+                  setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]);
+                }}
+                placeholder="Paste or type the abstract..."
+              />
+              <input
+                className="editor"
+                style={{ marginTop: 12 }}
+                value={keywords}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setKeywords(value);
+                  setText(composeSectionsText(abstract, value));
+                  setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]);
+                }}
+                placeholder="Keywords, comma separated"
+              />
+            </> : <>
+              <label className="upload-area"><span className="upload-icon">📄</span><strong>Drop your manuscript here</strong><span>PDF, DOCX, or TXT · Max 10MB</span><input type="file" accept=".pdf,.docx,.txt" onChange={handleUploadFile} /></label>
+              <div className="or-divider">or paste text</div>
+              <textarea className="editor" value={text} onChange={(event) => { setText(event.target.value); setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]); }} placeholder="Paste your full manuscript here..." />
+            </>}
             <div className="row">
               <button className="btn btn-primary" onClick={() => runMatch()} disabled={matching}>{matching ? 'Matching journals...' : '🔍 Find matching journals'}</button>
-              <button className="btn btn-secondary" onClick={() => { setTitle('Amorphous solid dispersions for enhancing solubility of poorly water-soluble drugs'); setText(sample); setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]); }}>Load a sample</button>
+              <button className="btn btn-secondary" onClick={() => { const sections = extractSectionsFromText(sample); setTitle('Amorphous solid dispersions for enhancing solubility of poorly water-soluble drugs'); setInputMode('full'); setAbstract(sections.abstract); setKeywords(sections.keywords); setText(sample); setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]); }}>Load a sample</button>
               <button className="btn btn-secondary" onClick={handleSaveManuscript} disabled={saving || !text.trim()}>{saving ? 'Saving...' : 'Save manuscript'}</button>
               <button className="btn btn-secondary" onClick={saveMatchingResults} disabled={!activeManuscriptId || matching}>{matching ? 'Saving...' : 'Save matches'}</button>
               <button className="btn btn-secondary" onClick={() => analyzeGaps()} disabled={gapLoading || !text.trim()}>{gapLoading ? 'Analyzing...' : 'AI gap analysis'}</button>
@@ -975,8 +1037,12 @@ export default function Home() {
                       className="btn btn-secondary"
                       style={{ width: '100%', justifyContent: 'space-between', textAlign: 'left', marginBottom: 8 }}
                       onClick={() => {
+                        const sections = extractSectionsFromText(item.raw_text);
                         setTitle(item.title);
                         setText(item.raw_text);
+                        setInputMode('full');
+                        setAbstract(sections.abstract);
+                        setKeywords(sections.keywords);
                         setActiveManuscriptId(item.id);
                         fetch(`/api/manuscript-matches?manuscriptId=${item.id}`)
                           .then((response) => response.json())

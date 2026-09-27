@@ -53,7 +53,7 @@ export async function createSemanticProfile(manuscriptText: string): Promise<{ p
   if (!process.env.ANTHROPIC_API_KEY) return { profile: null, status: 'missing_key' };
   try {
     const completion = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 700, temperature: 0,
+      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 1500, temperature: 0,
       system: 'Extract a strict academic manuscript profile. Return JSON only. Do not invent details.',
       messages: [{ role: 'user', content: `Extract this JSON profile. Use empty strings or arrays when evidence is absent.
 {"researchQuestion":"","studyDesign":"","subjectArea":[],"populationOrMaterial":[],"interventions":[],"methods":[],"outcomes":[],"articleType":"","exclusions":[]}
@@ -75,7 +75,7 @@ export async function judgeJournalCandidates(manuscriptText: string, candidates:
   if (!process.env.ANTHROPIC_API_KEY || candidates.length === 0) return { decisions: [], status: process.env.ANTHROPIC_API_KEY ? 'provider_error' : 'missing_key' };
   try {
     const completion = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 900, temperature: 0,
+      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 4000, temperature: 0,
       system: 'You are a strict academic journal-fit judge. Judge topical scope fit, not prestige or generic field overlap. Return JSON only.',
       messages: [{ role: 'user', content: `Judge each candidate journal for this manuscript. A journal is relevant only when its scope genuinely publishes the subject and article type. AI, statistics, or HPLC are methods and must not replace the research subject. Return exactly {"decisions":[{"name":"exact name","relevanceScore":0,"reasons":["evidence"],"exclusions":["reason"]}]}. Do not invent scope details.
 

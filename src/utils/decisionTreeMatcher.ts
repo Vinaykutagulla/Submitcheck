@@ -124,7 +124,7 @@ export type JournalMatchResult = {
 };
 
 const fieldSignals: Record<string, string[]> = {
-  'Life Sciences': ['drug', 'pharmaceut', 'clinical', 'cell', 'protein', 'nanomedicine', 'formulation', 'biology', 'patient'],
+  'Life Sciences': ['drug', 'pharmaceutical', 'pharmaceutics', 'clinical', 'cell', 'protein', 'nanomedicine', 'formulation', 'biology', 'patient'],
   Chemistry: ['chemistry', 'synthesis', 'molecule', 'reaction', 'catalyst', 'polymer', 'spectroscopy', 'chemical'],
   'Analytical Chemistry': ['chromatography', 'hplc', 'analytical method', 'retention time', 'method validation', 'pharmaceutical analysis', 'quality by design', 'design of experiments'],
   Engineering: ['engineering', 'prototype', 'mechanical', 'device', 'structural design', 'control system', 'robotics'],
@@ -141,8 +141,8 @@ const fieldSignals: Record<string, string[]> = {
   'Mathematics': ['mathematics', 'mathematical', 'theorem', 'proof', 'algebra', 'topology', 'equation', 'optimization'],
   'Neuroscience': ['neuroscience', 'neural', 'neuron', 'brain', 'cognitive neuroscience', 'synaptic', 'neuroimaging'],
   'Immunology and Microbiology': ['immunology', 'immune', 'antibody', 'microbiology', 'bacteria', 'microbiome', 'pathogen'],
-  'Biochemistry, Genetics and Molecular Biology': ['biochemistry', 'genetic', 'genome', 'genomic', 'protein', 'enzyme', 'molecular biology', 'transcriptom'],
-  'Pharmacology, Toxicology and Pharmaceutics': ['pharmacology', 'toxicology', 'pharmaceut', 'drug', 'dose-response', 'adverse effect'],
+  'Biochemistry, Genetics and Molecular Biology': ['biochemistry', 'genetic', 'genome', 'genomic', 'protein', 'enzyme', 'molecular biology', 'transcriptome', 'transcriptomic'],
+  'Pharmacology, Toxicology and Pharmaceutics': ['pharmacology', 'toxicology', 'pharmaceutical', 'pharmaceutics', 'drug', 'dose-response', 'adverse effect'],
   Nursing: ['nursing', 'nurse', 'patient care', 'clinical practice', 'caregiver'],
   Dentistry: ['dentistry', 'dental', 'oral health', 'periodontal', 'tooth', 'teeth'],
   'Health Professions': ['health profession', 'allied health', 'physiotherapy', 'occupational therapy', 'radiography', 'rehabilitation'],
@@ -155,8 +155,8 @@ const fieldSignals: Record<string, string[]> = {
 };
 
 export const topicFamilies: Record<string, string[]> = {
-  pharmaceutics: ['pharmaceut', 'drug delivery', 'formulation', 'dissolution', 'solid dispersion', 'dosage'],
-  pharmacology: ['anti-inflammatory', 'inflammatory', 'cytotoxicity', 'cytotoxic', 'pharmacolog', 'therapeutic', 'akt inhibitor', 'raw 264.7'],
+  pharmaceutics: ['pharmaceutics', 'pharmaceutical', 'drug delivery', 'formulation', 'dissolution', 'solid dispersion', 'dosage'],
+  pharmacology: ['anti-inflammatory', 'inflammatory', 'cytotoxicity', 'cytotoxic', 'pharmacology', 'pharmacological', 'therapeutic', 'akt inhibitor', 'raw 264.7'],
   'natural products': ['plant extract', 'phytochemical', 'phytoconstituent', 'flavonoid', 'coumarin', 'stilbene', 'terpenoid', 'phenol', 'medicinal plant', 'herbal'],
   'oxidative stress': ['oxidative stress', 'reactive oxygen species', 'oxidative damage', 'lipid peroxidation', 'malondialdehyde', 'antioxidant', 'antioxidants', 'redox'],
   'male infertility': ['male infertility', 'spermatozoa', 'sperm function', 'sperm quality', 'sperm dna fragmentation', 'semen', 'male reproductive', 'reproductive dysfunction'],
@@ -197,7 +197,7 @@ export const topicFamilies: Record<string, string[]> = {
   'chemical engineering': ['chemical engineering', 'process engineering', 'reaction engineering', 'separation', 'reactor', 'process design'],
   'business management': ['business', 'management', 'accounting', 'organization', 'marketing', 'supply chain', 'forecasting'],
   'nursing practice': ['nursing', 'nurse', 'patient care', 'clinical practice', 'caregiver'],
-  'molecular biology': ['biochemistry', 'genetic', 'genome', 'genomic', 'protein', 'enzyme', 'molecular biology', 'transcriptom'],
+  'molecular biology': ['biochemistry', 'genetic', 'genome', 'genomic', 'protein', 'enzyme', 'molecular biology', 'transcriptome', 'transcriptomic'],
   neuroscience: ['neuroscience', 'neural', 'neuron', 'brain', 'cognitive neuroscience', 'synaptic', 'neuroimaging', 'neurodegeneration', 'cortex'],
   immunology: ['immunology', 'immune response', 'antibody', 'antigen', 'cytokine', 'immunotherapy', 'host defense', 'inflammation'],
   microbiology: ['microbiology', 'bacteria', 'bacterial', 'microbiome', 'microbial', 'pathogen', 'antimicrobial', 'fungal'],
@@ -470,6 +470,12 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   const nucleicAcidJournal = /\bnucleic acids?\b/i.test(journalText);
   const specialtyMismatch = /alzheimer|dementia|hiv|fluoride|oncolog|diabetes|cardiology|cardiovascular|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(journalSpecialtyText)
     && !/alzheimer|dementia|\bhiv\b|fluoride|oncolog|diabetes|cardiolog|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(profileIdentityText);
+  // Journal names like "... Law Review" get credited for sharing subject vocabulary
+  // (e.g. "pharmaceutical", "environmental") with scientific manuscripts even though
+  // they publish legal/regulatory analysis, not research. This is a genre mismatch,
+  // not a topic mismatch, so it applies regardless of which subject area is involved.
+  const legalOrRegulatoryJournal = /\blaw review\b|\blaw journal\b|\bjournal of law\b/i.test(journalText);
+  const manuscriptIsLegalOrPolicy = /\blaw\b|\blegal\b|\bregulatory\b|\bregulation\b|\bpolicy\b|\bpolicies\b|\bcompliance\b|\bgovernance\b|\bintellectual property\b|\bpatent(?:s|ing)?\b|\blitigation\b|\bjurisprudence\b/i.test(profileIdentityText);
   const articleFit = profile.articleType !== 'Unknown' && hasWholeWord(journalText, profile.articleType) ? 8 : 0;
   const overWordLimit = journal.requirements.wordLimit !== null && profile.words > journal.requirements.wordLimit;
   let score = fieldFit + scopeFit + keywordFit + methodFit + articleFit + interdisciplinaryFit;
@@ -536,6 +542,9 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
       : null,
     primaryDrugDeliveryMismatch
       ? { penalty: 25, warning: 'Journal does not show a direct drug-delivery or formulation scope match' }
+      : null,
+    legalOrRegulatoryJournal && !manuscriptIsLegalOrPolicy
+      ? { penalty: 45, warning: 'Journal covers law/regulatory affairs, not scientific research on this topic' }
       : null,
   ].filter((signal): signal is { penalty: number; warning: string } => Boolean(signal));
   const strongestMismatch = mismatchSignals.sort((left, right) => right.penalty - left.penalty)[0];
@@ -611,12 +620,17 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
   // Band is score-only — broad and tolerant, so one weak signal (e.g. a missing APC
   // upstream, or one failed sub-check) can't silently erase a manuscript's only candidates.
   const band = bandForScore(score);
-  const confidence = band === 'Strong match' && directEvidence && warnings.length <= 1
+  const confidence = confidenceForMatch(band, Boolean(directEvidence), warnings.length);
+  return { score, confidence, band, directEvidence, topicalEvidence, reasons, warnings };
+}
+
+/** Shared so callers that re-rank or blend scores (e.g. the AI judge pass) don't leave a stale confidence label. */
+export function confidenceForMatch(band: MatchBand, directEvidence: boolean, warningsCount: number): 'High' | 'Medium' | 'Low' {
+  return band === 'Strong match' && directEvidence && warningsCount <= 1
     ? 'High'
     : band === 'Strong match' || band === 'Possible match'
       ? 'Medium'
       : 'Low';
-  return { score, confidence, band, directEvidence, topicalEvidence, reasons, warnings };
 }
 
 function getRankTieBreak(profile: ManuscriptProfile, journal: MatchJournal) {
