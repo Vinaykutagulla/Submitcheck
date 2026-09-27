@@ -9,6 +9,7 @@
     "evaluate:matcher": "tsx scripts/evaluate-matcher.ts",
     "evaluate:fixtures": "tsx fixtures/runMetrics.ts",
     "test:fixtures": "tsx fixtures/runMetrics.ts --assert",
+    "diagnose": "tsx scripts/diagnose-manuscript.ts",
     "lint": "eslint",
     "import:journals": "node scripts/import-scopus.js",
     "import:scimago": "node scripts/import-scimago.js",
