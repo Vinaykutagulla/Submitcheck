@@ -496,8 +496,8 @@ export function scoreJournal(profile: ManuscriptProfile, journal: MatchJournal, 
     && matchingTopics.some((topic) => ['molecular pharmacology', 'data science'].includes(topic))
     && matchingMethods.length > 0;
   const nucleicAcidJournal = /\bnucleic acids?\b/i.test(journalText);
-  const specialtyMismatch = /alzheimer|dementia|hiv|fluoride|oncolog|diabetes|cardiology|cardiovascular|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(journalSpecialtyText)
-    && !/alzheimer|dementia|\bhiv\b|fluoride|oncolog|diabetes|cardiolog|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(profileIdentityText);
+  const specialtyMismatch = /alzheimer|dementia|hiv|fluoride|oncolog|diabet(?:es|ic)|cardiology|cardiovascular|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(journalSpecialtyText)
+    && !/alzheimer|dementia|\bhiv\b|fluoride|oncolog|diabet(?:es|ic)|cardiolog|neurolog|dentistry|cancer|tumou?r|tuberculosis|malaria/.test(profileIdentityText);
   // Journal names like "... Law Review" get credited for sharing subject vocabulary
   // (e.g. "pharmaceutical", "environmental") with scientific manuscripts even though
   // they publish legal/regulatory analysis, not research. This is a genre mismatch,
