@@ -243,22 +243,22 @@ export async function POST(request: Request) {
       return nextQuery;
     }
 
-    const keywordQuery = await buildQuery(true, searchTerms);
+    const [keywordQuery, broadQuery] = await Promise.all([
+      buildQuery(true, searchTerms),
+      buildQuery(false),
+    ]);
     if (keywordQuery.error) throw keywordQuery.error;
+    if (broadQuery.error) throw broadQuery.error;
 
     const shouldUseFallbackTerms = !keywordQuery.data?.length && !((typeof body.field === 'string' && !isAnySelection(body.field)) || (typeof body.indexing === 'string' && !isAnySelection(body.indexing)) || (typeof body.quartile === 'string' && !isAnySelection(body.quartile)));
-    const fallbackData = shouldUseFallbackTerms ? (await buildQuery(true, analyticalFallbackTerms)).data ?? [] : [];
-    if (shouldUseFallbackTerms) {
-      const fallbackQuery = await buildQuery(true, analyticalFallbackTerms);
-      if (fallbackQuery.error) throw fallbackQuery.error;
-    }
+    const fallbackQuery = shouldUseFallbackTerms ? await buildQuery(true, analyticalFallbackTerms) : null;
+    if (fallbackQuery?.error) throw fallbackQuery.error;
+    const fallbackData = fallbackQuery?.data ?? [];
 
     // Keyword search is useful for narrowing a large catalog, but it must not
     // decide which journals are eligible for ranking. Merge it with the
     // filtered catalog so relevant journals whose metadata uses different
     // wording are still considered.
-    const broadQuery = await buildQuery(false);
-    if (broadQuery.error) throw broadQuery.error;
     const candidateRows = [...(keywordQuery.data ?? []), ...fallbackData, ...(broadQuery.data ?? [])];
     const rowsById = new Map<string, (typeof candidateRows)[number]>();
     for (const row of candidateRows) {
