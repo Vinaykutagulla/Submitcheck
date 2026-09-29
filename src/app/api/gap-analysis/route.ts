@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { anthropic } from '@/lib/claude';
+import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 type GapAnalysisRequest = {
   manuscriptText?: unknown;
@@ -16,6 +17,18 @@ export async function POST(request: Request) {
     body = (await request.json()) as GapAnalysisRequest;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON request body.' }, { status: 400 });
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Please log in to use AI gap analysis.' }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase.from('profiles').select('plan, plan_expires_at').eq('id', user.id).single();
+  const planActive = profile?.plan === 'pro' && (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date());
+  if (!planActive) {
+    return NextResponse.json({ error: 'Upgrade to Pro to use AI gap analysis.' }, { status: 403 });
   }
 
   const manuscriptText = typeof body.manuscriptText === 'string' ? body.manuscriptText : '';

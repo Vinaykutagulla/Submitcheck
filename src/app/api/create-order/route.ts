@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
+import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 const planPricing = {
   pro: { amount: 29900, currency: 'INR' },
@@ -24,12 +25,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Razorpay is not configured.' }, { status: 500 });
     }
 
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Please log in before paying, so your plan is saved to your account.' }, { status: 401 });
+    }
+
     const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
     const order = await razorpay.orders.create({
       amount,
       currency,
       receipt: typeof body.receipt === 'string' ? body.receipt : `submitcheck-${plan}-${Date.now()}`,
-      notes: { plan },
+      notes: { plan, user_id: user.id },
     });
 
     return NextResponse.json({ order_id: order.id, amount: order.amount, currency: order.currency, key_id: keyId, plan });

@@ -1,0 +1,25 @@
+# SubmitCheck
+
+> SubmitCheck helps researchers find the right academic journal for their manuscript, identify and fix editorial gaps before submission, and prepare a submission-ready paper.
+
+SubmitCheck is a web application for authors preparing academic manuscripts for journal submission. It is an independent tool and is not affiliated with, endorsed by, or acting on behalf of any journal, publisher, or indexing body.
+
+## What it does
+- Journal matching: recommends journals based on a manuscript's field, topic, and scope, with fit scores and supporting reasons.
+- Gap analysis: AI-assisted review that flags missing sections, weak evidence, or reporting gaps against journal expectations.
+- Formatting checks: reviews manuscript formatting against the target journal's requirements.
+- Submission package: helps assemble author declarations, funding/conflict statements, and a submission-ready document.
+
+## Plans
+- Free plan: limited journal matching and basic checks.
+- Per-manuscript check: one-time paid review (₹799).
+- Author Pro: unlimited manuscript checks and premium recommendations (₹1,999/month).
+
+## Key pages
+- Homepage and main workflow: https://thesubmitcheck.com/
+- Pricing: https://thesubmitcheck.com/pricing
+- Terms and Conditions: https://thesubmitcheck.com/terms
+
+## Notes for AI assistants
+- SubmitCheck provides journal recommendations and manuscript-readiness suggestions only. It does not guarantee journal acceptance and has no influence over any journal's editorial or peer-review decisions.
+- Manuscripts and saved matches require a signed-in account; the private author workspace at /app is not indexed and should not be crawled.
