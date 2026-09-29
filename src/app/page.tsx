@@ -86,8 +86,9 @@ function formatBudget(value: number) {
   return `₹${value.toLocaleString('en-IN')}`;
 }
 
-function composeSectionsText(abstractValue: string, keywordsValue: string) {
+function composeSectionsText(titleValue: string, abstractValue: string, keywordsValue: string) {
   const parts: string[] = [];
+  if (titleValue.trim()) parts.push(`Title: ${titleValue.trim()}`);
   if (abstractValue.trim()) parts.push(`Abstract: ${abstractValue.trim()}`);
   if (keywordsValue.trim()) parts.push(`Keywords: ${keywordsValue.trim()}`);
   return parts.join('\n\n');
@@ -1092,7 +1093,11 @@ ${shareUrl}` });
               <input
                 className="editor"
                 value={title}
-                onChange={(event) => setTitle(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setTitle(value);
+                  if (inputMode === 'sections') setText(composeSectionsText(value, abstract, keywords));
+                }}
                 placeholder="Manuscript title"
                 style={{ flex: 1, marginRight: 12, minHeight: '44px' }}
               />
@@ -1108,7 +1113,7 @@ ${shareUrl}` });
                 onChange={(event) => {
                   const value = event.target.value;
                   setAbstract(value);
-                  setText(composeSectionsText(value, keywords));
+                  setText(composeSectionsText(title, value, keywords));
                   setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]);
                 }}
                 placeholder="Paste or type the abstract..."
@@ -1120,7 +1125,7 @@ ${shareUrl}` });
                 onChange={(event) => {
                   const value = event.target.value;
                   setKeywords(value);
-                  setText(composeSectionsText(abstract, value));
+                  setText(composeSectionsText(title, abstract, value));
                   setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]);
                 }}
                 placeholder="Keywords, comma separated"
