@@ -202,6 +202,7 @@ export const topicFamilies: Record<string, string[]> = {
   immunology: ['immunology', 'immune response', 'antibody', 'antigen', 'cytokine', 'immunotherapy', 'host defense', 'inflammation'],
   microbiology: ['microbiology', 'bacteria', 'bacterial', 'microbiome', 'microbial', 'pathogen', 'antimicrobial', 'fungal'],
   dentistry: ['dentistry', 'dental', 'oral health', 'periodontal', 'tooth', 'teeth', 'caries', 'maxillofacial'],
+  ophthalmology: ['ophthalmology', 'ophthalmic', 'ophthalmologist', 'retina', 'retinal', 'retinopathy', 'diabetic retinopathy', 'fundus', 'macular degeneration', 'glaucoma', 'cataract', 'corneal', 'vitreous'],
   veterinary: ['veterinary', 'animal health', 'livestock', 'canine', 'feline', 'veterinarian', 'zoonotic', 'animal disease'],
   'health professions': ['health profession', 'allied health', 'physiotherapy', 'occupational therapy', 'radiography', 'rehabilitation', 'clinical practice', 'patient care'],
   'decision sciences': ['decision science', 'operations research', 'decision making', 'optimization', 'supply chain', 'forecasting', 'simulation', 'queueing'],
