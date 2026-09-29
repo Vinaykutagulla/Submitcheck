@@ -247,55 +247,6 @@ function buildSentenceSuggestions(text: string) {
 function buildSentenceRewrite(sentence: string) {
   const normalized = sentence.replace(/\s+/g, ' ').trim();
 
-  if (/Real-World Evidence Generation Methods for Health Technology Assessment: A Narrative Synthesis of Global Practice and Implications for India/i.test(normalized)) {
-    return {
-      suggestion: 'Real-world evidence generation methods in health technology assessment: a narrative synthesis of global practice and implications for India.',
-      reason: 'Tighten title phrasing and improve readability',
-    };
-  }
-
-  if (/has moved from a peripheral supplement to randomized controlled trials \(RCTs\) toward a routine input/i.test(normalized) || /has moved from a peripheral supplement to randomized controlled trials \(RCTs\) toward a routine input in health technology assessment/i.test(normalized)) {
-    return {
-      suggestion: 'Real-world evidence (RWE) has evolved from a supplementary role alongside randomized controlled trials (RCTs) to become a routine input in health technology assessment (HTA) and reimbursement decision-making.',
-      reason: 'Long sentence — split or simplify for readability',
-    };
-  }
-
-  if (/Randomized controlled trials remain the reference standard for establishing efficacy, but they are conducted in selected populations under controlled conditions and therefore have limited ability to answer questions about effectiveness, safety and value in routine clinical practice\./i.test(normalized)) {
-    return {
-      suggestion: 'Randomized controlled trials remain the reference standard for establishing efficacy; however, they are conducted in selected populations under controlled conditions, which limits their ability to answer questions about effectiveness, safety, and value in routine clinical practice.',
-      reason: 'Improve clarity and scientific readability',
-    };
-  }
-
-  if (/Regulatory and HTA acceptance of RWE has moved from general frameworks toward detailed, method-specific guidance\./i.test(normalized)) {
-    return {
-      suggestion: 'Regulatory and HTA acceptance of RWE has evolved from broad frameworks toward more detailed, method-specific guidance.',
-      reason: 'Tighten phrasing and improve precision',
-    };
-  }
-
-  if (/RWE use is increasingly visible across the product lifecycle rather than only at launch, particularly for oncology and orphan-disease therapies\./i.test(normalized)) {
-    return {
-      suggestion: 'RWE is increasingly used across the product lifecycle, not only at launch, particularly in oncology and orphan-disease therapies.',
-      reason: 'Make the sentence more direct and publication-ready',
-    };
-  }
-
-  if (/Across the guidance reviewed, regulators and HTA bodies converge on the importance of robust study design, including device-specific considerations, but their emphases diverge in a way that matters for evidence planning: HTA guidance tends to stress contextual relevance and cost-effectiveness, while regulatory guidance prioritizes binding safety and efficacy evidence \[4,21\]\./i.test(normalized)) {
-    return {
-      suggestion: 'Across the guidance reviewed, regulators and HTA bodies agree on the importance of robust study design, including device-specific considerations; however, their emphasis differs in ways that matter for evidence planning. HTA guidance tends to prioritize contextual relevance and cost-effectiveness, whereas regulatory guidance prioritizes binding safety and efficacy evidence [4,21].',
-      reason: 'Improve clarity and academic flow',
-    };
-  }
-
-  if (/Real-world evidence \(RWE\) — clinical evidence on the use, benefits and risks of a health product derived from real-world data \(RWD\) such as electronic health records, insurance claims, disease registries and patient-generated data — has moved from a peripheral supplement to randomized controlled trials \(RCTs\) toward a routine input in health technology assessment \(HTA\) and reimbursement decision-making worldwide\./i.test(normalized)) {
-    return {
-      suggestion: 'Real-world evidence (RWE) refers to clinical information derived from real-world data such as electronic health records, insurance claims, disease registries, and patient-generated data. In health technology assessment (HTA) and reimbursement decision-making, RWE has evolved from a supplementary role alongside randomized controlled trials (RCTs) to become a routine input.',
-      reason: 'Long sentence — split or simplify for readability',
-    };
-  }
-
   if (normalized.length > 160) {
     const splitSuggestion = splitLongSentence(normalized);
     if (splitSuggestion) {
@@ -306,52 +257,10 @@ function buildSentenceRewrite(sentence: string) {
     }
   }
 
-  if (/\bwas\b/i.test(normalized) && !/\bwas not\b/i.test(normalized)) {
-    return {
-      suggestion: normalized.replace(/\b(?:the|this|that|it|they|he|she|we|i)\s+was\b/gi, (match) => match.replace(/was/i, 'was')),
-      reason: 'Prefer active voice for stronger scientific writing',
-    };
-  }
-
-  if (/^this review highlights|^this review discusses/i.test(normalized)) {
-    return {
-      suggestion: normalized.replace(/^this review highlights/i, 'This review summarizes'),
-      reason: 'Make the sentence more direct and publication-ready',
-    };
-  }
-
-  if (/\bamong the most studied\b/i.test(normalized)) {
-    return {
-      suggestion: normalized.replace(/among the most studied/i, 'among the most widely studied'),
-      reason: 'Tighten phrasing and improve precision',
-    };
-  }
-
   if (/\bthere are\b/i.test(normalized)) {
     return {
       suggestion: normalized.replace(/\bthere are\b/i, 'Several'),
       reason: 'Replace vague wording with stronger academic phrasing',
-    };
-  }
-
-  if (/toward a routine input/i.test(normalized)) {
-    return {
-      suggestion: normalized.replace(/toward a routine input/i, 'into a routine input'),
-      reason: 'Tighten phrasing and improve precision',
-    };
-  }
-
-  if (/rather than only at launch/i.test(normalized)) {
-    return {
-      suggestion: normalized.replace(/rather than only at launch/i, 'instead of being limited to launch'),
-      reason: 'Make the sentence more precise and direct',
-    };
-  }
-
-  if (/in a way that matters for evidence planning:/i.test(normalized)) {
-    return {
-      suggestion: normalized.replace(/in a way that matters for evidence planning:/i, 'in ways that matter for evidence planning:'),
-      reason: 'Improve clarity and academic tone',
     };
   }
 
@@ -395,14 +304,11 @@ function getGaps(text: string, journal: Journal) {
   const gaps = [] as { priority: 'critical' | 'important'; title: string; description: string; example: string }[];
   const abstract = text.match(/(?:^|\n)\s*abstract\s*:?[ \t]*\n?([\s\S]*?)(?=\n\s*keywords?\b|\n\s*(?:introduction|1\.?\s+introduction)\b|$)/i)?.[1] ?? '';
   const hasMethods = /(?:^|\n)\s*(?:materials and methods|methods?|experimental|methodology)\b/i.test(text);
-  const hasResults = /(?:^|\n)\s*(?:results?|findings?)\b|\bIC50\b|\bp\s*[<=>]|\bRMSD\b/i.test(text);
-  if (!abstract.trim()) gaps.push({ priority: 'critical', title: `Abstract not detected for ${journal.name}`, description: 'Editors need a self-contained abstract covering objective, methods, key results, and conclusion.', example: 'Add a 200-300 word abstract with the extract, LC-HRMS method, docking/ADMET workflow, RAW 264.7 assay, key numerical results, and a cautious conclusion.' });
-  else if (!/(methods?|results?|findings?|conclusion)/i.test(abstract)) gaps.push({ priority: 'critical', title: 'Abstract does not expose the evidence chain', description: `The abstract does not clearly state methods and results for ${journal.name}.`, example: 'Add sentences for LC-MS identification, docking/MD and ADMET, RAW 264.7 results including IC50 >100 µg/mL, and the limitation.' });
-  if (/lc[- ](?:esi[- ])?qtof|hrms|mass spectrometry/i.test(lower) && !/(standard|level|quantif|ms\/ms|accuracy|validation|confidence|mass error)/i.test(lower)) gaps.push({ priority: 'critical', title: 'Phytochemical identifications need confidence levels', description: 'Distinguish tentative database annotations from confirmed structures and show evidence for each major compound.', example: 'Add m/z, retention time, mass error, adduct, diagnostic fragments, standard/database source, and identification level.' });
-  if (/molecular docking|molecular dynamics|admet/i.test(lower) && !/(software|version|pdb|validation|redocking|rmsd|grid|force field|water model)/i.test(lower)) gaps.push({ priority: 'critical', title: 'Docking/MD/ADMET methods are not reproducible enough', description: `For ${journal.name}, report PDB structure, ligand preparation, software versions, grid settings, reference validation, MD parameters, and ADMET platform/version.`, example: 'Include PDB ID, grid coordinates, exhaustiveness, redocking RMSD, force field, water model, trajectory length, and ADMET tool/version.' });
-  if (/raw\s*264\.7|cytotoxicity|mtt assay/i.test(lower) && !/(vehicle|untreated|positive control|replicate|\bn\s*=|statistical|anova|dose[- ]response|mean ±|mean \+\/-)/i.test(lower)) gaps.push({ priority: 'critical', title: 'RAW 264.7 assay reporting is incomplete', description: 'Report cell source/passage, controls, independent replicates, exposure time, dose-response analysis, statistical test, and IC50 uncertainty.', example: 'Report n, vehicle/positive controls, concentrations, exposure time, mean ± SD/CI, statistical test, correction, and IC50 confidence interval.' });
-  if (!/(limitation|limitations|future work|future directions)/i.test(lower)) gaps.push({ priority: 'important', title: 'Study limitations are not explicit', description: 'State that compound assignments may be tentative, docking and ADMET are predictive, and RAW 264.7 results do not establish in-vivo efficacy.', example: 'Add limitations on annotation confidence, computational prediction, cell-line scope, lack of in-vivo confirmation, and the next validation experiment.' });
-  if (!hasMethods || !hasResults) gaps.push({ priority: 'important', title: 'Editorial evidence structure needs checking', description: `Detected sections: Methods ${hasMethods ? 'present' : 'not detected'}, Results ${hasResults ? 'present' : 'not detected'}.`, example: 'Separate analytical methods/results, computational methods/results, in-vitro methods/results, statistical analysis, limitations, and conclusion.' });
+  const hasResults = /(?:^|\n)\s*(?:results?|findings?)\b/i.test(text);
+  if (!abstract.trim()) gaps.push({ priority: 'critical', title: `Abstract not detected for ${journal.name}`, description: 'Editors need a self-contained abstract covering objective, methods, key results, and conclusion.', example: 'Add a 200-300 word abstract covering the objective, methods, key numerical results, and a cautious conclusion.' });
+  else if (!/(methods?|results?|findings?|conclusion)/i.test(abstract)) gaps.push({ priority: 'critical', title: 'Abstract does not expose the evidence chain', description: `The abstract does not clearly state methods and results for ${journal.name}.`, example: 'Restructure the abstract to state the objective, summarize the methods, report key quantitative results, and end with a conclusion.' });
+  if (!/(limitation|limitations|future work|future directions)/i.test(lower)) gaps.push({ priority: 'important', title: 'Study limitations are not explicit', description: 'Editors expect explicit limitations to contextualize how far the findings can be generalized.', example: 'Add a limitations paragraph covering sample size, scope, and any assumptions made in the analysis.' });
+  if (!hasMethods || !hasResults) gaps.push({ priority: 'important', title: 'Editorial evidence structure needs checking', description: `Detected sections: Methods ${hasMethods ? 'present' : 'not detected'}, Results ${hasResults ? 'present' : 'not detected'}.`, example: 'Add explicit Methods and Results headings, and separate the statistical analysis, limitations, and conclusion.' });
   if (journal.requirements.abstract === 'structured' && !/(background|objective|methods|results|conclusion)[:\s]/i.test(text)) {
     gaps.push({ priority: 'critical', title: 'Abstract not structured', description: 'This journal requires Background, Methods, Results, and Conclusion sections.', example: 'Background: ...\nMethods: ...\nResults: ...\nConclusion: ...' });
   }
@@ -468,6 +374,7 @@ export default function Home() {
   const [savedMatches, setSavedMatches] = useState<Array<{ id: string; manuscript_id: string; journal_id: string; fit_score: number; gaps: Array<{ title?: string; description?: string }>; created_at: string }>>([]);
   const [activeManuscriptId, setActiveManuscriptId] = useState<string | null>(null);
   const [aiGaps, setAiGaps] = useState<Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>>([]);
+  const [aiSentenceSuggestions, setAiSentenceSuggestions] = useState<Array<{ sentence: string; suggestion: string; reason: string }>>([]);
   const [gapLoading, setGapLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [serviceType, setServiceType] = useState('Manuscript');
@@ -877,13 +784,14 @@ ${shareUrl}` });
         }),
       });
 
-      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; usesFallback?: boolean; error?: string };
+      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; sentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }>; usesFallback?: boolean; error?: string };
 
       if (!response.ok || !payload.gaps) {
         throw new Error(payload.error || 'Unable to generate suggestions.');
       }
 
       setAiGaps(payload.gaps);
+      setAiSentenceSuggestions(payload.sentenceSuggestions ?? []);
       setSaveMessage(payload.usesFallback ? 'Gap analysis is using a local fallback model.' : 'Gap analysis completed.');
     } catch (error) {
       setSaveMessage(error instanceof Error ? error.message : 'Unable to run gap analysis.');
@@ -1216,7 +1124,7 @@ ${shareUrl}` });
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
         </>}
 
-        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} onFormat={() => setStep(3)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} />}</section>}
+        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} onFormat={() => setStep(3)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} aiSentenceSuggestions={aiSentenceSuggestions} />}</section>}
 
         {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
@@ -1537,13 +1445,19 @@ ${shareUrl}` });
   return <article className={sponsored ? 'journal-card sponsored' : 'journal-card'}>{sponsored && <div className="sponsor-flag">⭐ Sponsored · Featured</div>}<div className="journal-head"><div><h3>{journal.name}</h3><p>{journal.publisher} · {journal.field}</p><a className="journal-website-top" href={websiteUrl} target="_blank" rel="noreferrer">↗ {websiteLabel}</a><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.oa && <span className="tag oa">Free-to-publish</span>}{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}</div></div><div className="fit"><span>Scientific fit: <b className={match.score > 80 ? 'score-good' : 'score-caution'}>{match.score}%</b></span><em className={gaps.some((gap) => gap.priority === 'critical') ? 'concerns' : 'good'}>{match.confidence} confidence</em></div></div><div className="journal-meta"><span><small>APC</small>{liveApc?.amount ? `${liveApc.amount.toLocaleString()} ${liveApc.currency}` : 'Not verified'}</span><span><small>Speed</small>{liveApc?.publicationWeeks ? `${liveApc.publicationWeeks} weeks` : 'Not verified'}</span><span><small>Gaps found</small>{gaps.length}</span><span><small>Word limit</small>{journal.requirements.wordLimit ? `${journal.requirements.wordLimit} words` : 'Not listed'}</span></div><div className="match-reasons"><strong>Why this match</strong>{match.reasons.slice(0, 2).map((reason) => <span key={reason}>✓ {reason}</span>)}{match.warnings.slice(0, 1).map((warning) => <span className="warning" key={warning}>! {warning}</span>)}</div><div className="journal-actions"><button className="btn-small primary-btn" onClick={() => onSelect(journal)}>🔧 Fix</button><button className="btn-small" onClick={() => onSelect(journal)}>📐 Format</button><button className="btn-small" onClick={handleShare}>{shareState === 'copied' ? '🔗 Link copied' : shareState === 'shared' ? '✓ Shared' : shareState === 'failed' ? '⚠ Copy failed' : '📤 Share'}</button>{(journal.issn || journal.eissn) && <button className="btn-small" onClick={checkLiveApc} disabled={apcLoading}>{apcLoading ? 'Fetching APC & speed...' : liveApc ? (liveApc.amount || liveApc.publicationWeeks ? '✓ Live details loaded' : 'No live details found') : 'Fetch APC & speed'}</button>}{liveApc?.apcUrl ? <a className="btn-small journal-link" href={liveApc.apcUrl} target="_blank" rel="noreferrer">↗ View APC source</a> : liveApc?.apcSearchUrl ? <a className="btn-small journal-link" href={liveApc.apcSearchUrl} target="_blank" rel="noreferrer">↗ Find APC pricing</a> : null}</div>{liveApc?.journalUrl ? <div className="live-source">Website fetched from {liveApc.source} · <a href={liveApc.journalUrl} target="_blank" rel="noreferrer">Open website</a></div> : liveApc?.apcSearchUrl ? <div className="live-source">No structured APC record found; search publisher pricing before submission.</div> : null}</article>;
 }
 
-function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text, onTextChange, title, appliedDrafts, visualHtml }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; onFormat: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia?: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }> }) {
+function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text, onTextChange, title, appliedDrafts, visualHtml, aiSentenceSuggestions }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; onFormat: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia?: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>; aiSentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }> }) {
   void visualHtml;
   const visible = plan === 'pro' ? gaps : gaps.slice(0, 5);
   const [copied, setCopied] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const [resolvedSentenceIndexes, setResolvedSentenceIndexes] = useState<number[]>([]);
-  const sentenceSuggestions = buildSentenceSuggestions(text);
+  const sentenceSuggestions = (() => {
+    if (!aiSentenceSuggestions?.length) return buildSentenceSuggestions(text);
+    const sentences = splitIntoSentences(text);
+    return aiSentenceSuggestions
+      .map((item) => ({ ...item, index: sentences.findIndex((candidate) => candidate.trim() === item.sentence.trim()) }))
+      .filter((item) => item.index >= 0);
+  })();
   const activeSentenceSuggestions = sentenceSuggestions.filter((item) => !resolvedSentenceIndexes.includes(item.index));
 
   useEffect(() => {
