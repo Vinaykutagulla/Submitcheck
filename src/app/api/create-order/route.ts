@@ -9,15 +9,16 @@ const planPricing = {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { plan?: keyof typeof planPricing; amount?: unknown; currency?: unknown; receipt?: unknown };
+    const body = await request.json() as { plan?: keyof typeof planPricing; receipt?: unknown };
     const plan = body.plan === 'pro' || body.plan === 'manuscript' ? body.plan : 'pro';
     const pricing = planPricing[plan];
-    const amount = typeof body.amount === 'number' ? body.amount : pricing.amount;
-    const currency = typeof body.currency === 'string' ? body.currency : pricing.currency;
-
-    if (!Number.isInteger(amount) || amount < 100) {
-      return NextResponse.json({ error: 'Amount must be at least 100 paise.' }, { status: 400 });
-    }
+    // Price is always resolved server-side from the fixed plan catalog above - never accept an
+    // amount/currency from the client. This previously let anyone bypass the UI and call this
+    // endpoint directly with an arbitrary (e.g. 1-rupee) amount, pay that real-but-wrong amount via
+    // Razorpay, and still have /api/verify-payment and the webhook grant a full Pro upgrade, since
+    // neither of them re-validates the captured amount against the intended plan price either.
+    const amount = pricing.amount;
+    const currency = pricing.currency;
 
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
