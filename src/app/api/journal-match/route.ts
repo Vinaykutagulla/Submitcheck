@@ -167,11 +167,10 @@ export async function POST(request: Request) {
 
     const maxBudget = typeof body.budget === 'number' && Number.isFinite(body.budget) && body.budget > 0 ? body.budget : null;
     const manuscriptProfile = profileManuscript(body.manuscriptText);
-    const semanticResult = await createSemanticProfile(body.manuscriptText);
-    const semanticProfile = semanticResult.profile;
-
     const supabase = getAdminClient();
     if (!supabase) {
+      const semanticResult = await createSemanticProfile(body.manuscriptText);
+      const semanticProfile = semanticResult.profile;
       const fallbackRanked = rankJournals(body.manuscriptText, fallbackJournals as unknown as MatchJournal[], semanticProfile);
       const matches = fallbackRanked
         .filter(({ match }) => match.band !== null && Boolean(match.directEvidence) && Boolean(match.topicalEvidence))
@@ -200,22 +199,15 @@ export async function POST(request: Request) {
     const prioritizedTopics = [...manuscriptProfile.topics]
       .sort((left, right) => (manuscriptProfile.topicScores[right] ?? 0) - (manuscriptProfile.topicScores[left] ?? 0));
     const topicTerms = prioritizedTopics.flatMap((topic) => topicFamilies[topic]?.slice(0, 3) ?? []);
-    const semanticTerms = semanticProfile
-      ? [
-        semanticProfile.researchQuestion,
-        semanticProfile.studyDesign,
-        ...semanticProfile.subjectArea,
-        ...semanticProfile.populationOrMaterial,
-        ...semanticProfile.interventions,
-        ...semanticProfile.methods,
-        ...semanticProfile.outcomes,
-      ]
-      : [];
     const analyticalFallbackTerms = [
       'aqbd', 'analytical quality by design', 'ich q14', 'hplc', 'high performance liquid chromatography',
       'chromatography', 'chromatographic method', 'method validation', 'method development', 'pharmaceutical analysis'
     ];
-    const searchTerms = [...new Set([...prioritizedTopics, ...topicTerms, ...manuscriptProfile.keywords, ...semanticTerms, ...analyticalFallbackTerms])]
+    // Deliberately built from deterministic signals only (local topic-family keywords, no
+    // Claude call) so the DB candidate search below can run concurrently with the semantic
+    // profile request instead of waiting on it - the profile still fully informs ranking/judging
+    // further down, and the unfiltered `broadQuery` already covers recall independent of these terms.
+    const searchTerms = [...new Set([...prioritizedTopics, ...topicTerms, ...manuscriptProfile.keywords, ...analyticalFallbackTerms])]
       .map((term) => term.replace(/[^a-z0-9 -]/gi, '').trim())
       .filter((term) => term.length >= 3)
       .filter((term) => !['compounds', 'compound', 'positive', 'that', 'using', 'based', 'molecular', 'dynamics', 'network', 'simulation', 'research', 'analysis', 'article', 'review'].includes(term))
@@ -245,10 +237,15 @@ export async function POST(request: Request) {
       return nextQuery;
     }
 
-    const [keywordQuery, broadQuery] = await Promise.all([
+    // The semantic-profile Claude call and the DB candidate search were previously fully
+    // serialized even though neither depends on the other's result - running them concurrently
+    // removes the smaller of the two durations from the critical path entirely.
+    const [semanticResult, keywordQuery, broadQuery] = await Promise.all([
+      createSemanticProfile(body.manuscriptText),
       buildQuery(true, searchTerms),
       buildQuery(false),
     ]);
+    const semanticProfile = semanticResult.profile;
     if (keywordQuery.error) throw keywordQuery.error;
     if (broadQuery.error) throw broadQuery.error;
 

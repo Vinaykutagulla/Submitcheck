@@ -260,13 +260,24 @@ const genericMatchWords = new Set(['molecular', 'dynamics', 'simulation', 'model
 const weakKeywordWords = new Set(['article', 'based', 'case', 'data', 'evaluation', 'evidence', 'experimental', 'investigation', 'manuscript', 'observational', 'results', 'study', 'systematic', 'treatment', 'using', 'analysis', 'review']);
 
 function normalizePhrase(value: string) {
-  return value
+  const cached = normalizePhraseCache.get(value);
+  if (cached !== undefined) return cached;
+  const normalized = value
     .toLowerCase()
     .replace(/[\u2010-\u2015_/-]+/g, ' ')
     .replace(/[^a-z0-9\s]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  // Ranking a large catalog calls this with the same handful of (short) journal-identity
+  // strings many times over (once per topic/keyword/method tested against that journal), so a
+  // bounded memo turns O(candidates x terms) redundant normalization into O(candidates + terms).
+  // Capped and cleared wholesale rather than LRU'd since catalog batches are the dominant traffic
+  // pattern and a full clear is cheap compared to the normalization work it's saving.
+  if (normalizePhraseCache.size > 20000) normalizePhraseCache.clear();
+  normalizePhraseCache.set(value, normalized);
+  return normalized;
 }
+const normalizePhraseCache = new Map<string, string>();
 
 // Some manuscripts contain periods spliced into the middle of words with no surrounding
 // whitespace ("compu.ting", "archit.ecture") - seen from AI-detector-evasion tooling that
@@ -277,12 +288,28 @@ function descrambleMidWordPunctuation(value: string): string {
   return value.replace(/([a-zA-Z])\.(?=[a-zA-Z])/g, '$1');
 }
 
+// `new RegExp` built from a dynamic string can't benefit from V8's literal-regex caching, and
+// this helper is called for every topic/keyword/method against every candidate journal (easily
+// hundreds of thousands of calls when ranking a ~2000-journal catalog). The same small set of
+// terms (topic-family keywords, manuscript keywords/methods) repeats across every journal, so
+// caching the compiled pattern by term turns that into one compilation per unique term instead
+// of one per (term, journal) pair - this was the single largest cost in journal matching.
+const wholeWordRegexCache = new Map<string, RegExp>();
+function getWholeWordRegex(normalizedTerm: string) {
+  let pattern = wholeWordRegexCache.get(normalizedTerm);
+  if (!pattern) {
+    const escaped = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    pattern = new RegExp(`(?:^|\\b)${escaped}(?:$|\\b)`, 'i');
+    wholeWordRegexCache.set(normalizedTerm, pattern);
+  }
+  return pattern;
+}
+
 function hasWholeWord(text: string, term: string) {
   const normalizedText = normalizePhrase(text);
   const normalizedTerm = normalizePhrase(term);
   if (!normalizedTerm) return false;
-  const escaped = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|\\b)${escaped}(?:$|\\b)`, 'i').test(normalizedText);
+  return getWholeWordRegex(normalizedTerm).test(normalizedText);
 }
 
 function hasWordOrPlural(text: string, term: string) {
