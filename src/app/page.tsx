@@ -1585,7 +1585,10 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
       .map((item) => ({ ...item, index: sentences.findIndex((candidate) => candidate.trim() === item.sentence.trim()) }))
       .filter((item) => item.index >= 0);
   })();
-  const activeSentenceSuggestions = sentenceSuggestions.filter((item) => !resolvedSentenceIndexes.includes(item.index));
+  const freeSentenceLimit = 3;
+  const visibleSentenceSuggestions = plan === 'pro' ? sentenceSuggestions : sentenceSuggestions.slice(0, freeSentenceLimit);
+  const lockedSentenceSuggestionCount = sentenceSuggestions.length - visibleSentenceSuggestions.length;
+  const activeSentenceSuggestions = visibleSentenceSuggestions.filter((item) => !resolvedSentenceIndexes.includes(item.index));
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -1597,7 +1600,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
       return;
     }
     delete editor.dataset.visualHtml;
-    const matches = sentenceSuggestions
+    const matches = visibleSentenceSuggestions
       .map((item) => ({ item, start: text.indexOf(item.sentence) }))
       .filter((match) => match.start >= 0)
       .sort((left, right) => left.start - right.start);
@@ -1616,7 +1619,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
     });
     fragment.append(text.slice(cursor));
     editor.replaceChildren(fragment);
-  }, [text, sentenceSuggestions, visualHtml]);
+  }, [text, visibleSentenceSuggestions, visualHtml]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -1632,7 +1635,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
     });
     document.querySelectorAll<HTMLElement>('.comment-card').forEach((card, position) => {
 
-      const item = sentenceSuggestions[position];
+      const item = visibleSentenceSuggestions[position];
       if (item) {
         card.dataset.commentIndex = String(item.index);
         card.hidden = resolvedSentenceIndexes.includes(item.index);
@@ -1654,7 +1657,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
         mark?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       };
     });
-  }, [text, sentenceSuggestions, activeSentenceSuggestions, resolvedSentenceIndexes]);
+  }, [text, visibleSentenceSuggestions, activeSentenceSuggestions, resolvedSentenceIndexes]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -1817,5 +1820,5 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
     URL.revokeObjectURL(url);
   };
 
-  return <div><div className={gaps.some((gap) => gap.priority === 'critical') ? 'verdict red' : 'verdict green'}>{gaps.length ? `⚠️ ${gaps.filter((gap) => gap.priority === 'critical').length} critical gaps to fix` : '✅ Editorial checks passed'}</div><div className="fix-layout">{gaps.length ? <div className="fix-column panel"><label className="panel-label">What to fix <span className="hint">These are editorial drafts. Review every change before submission.</span></label>{visible.map((gap) => <div className={`fix-item ${gap.priority}`} key={gap.title}><h3>{gap.priority === 'critical' ? '❌' : '🟡'} {gap.title}</h3><p>{gap.description}</p><pre>{gap.example}</pre><div className="fix-actions"><button className="btn-small" onClick={() => copySuggestion(gap)}>{copied === gap.title ? '✓ Copied' : 'Copy suggestion'}</button><button className="btn-small primary-btn" onClick={() => onApply(gap)}>✍ Apply draft</button><button className="btn-small" disabled={fixed.includes(gap.title)} onClick={() => onFix(gap.title)}>{fixed.includes(gap.title) ? '✅ Reviewed' : 'Mark reviewed'}</button></div></div>)}{plan === 'free' && gaps.length > 5 && <div className="locked-card"><div className="blur-line">First editorial review shown · Pro for the full set</div><div className="locked-overlay">🔒<strong>{gaps.length - 5} more journal-specific fixes stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock full review</button></div></div>}</div> : <div className="panel fix-ready"><strong>Editorial checks passed for the detected requirements.</strong><span>Still review the full manuscript before submission.</span></div>}<div className="panel editor-column"><label className="panel-label">Manuscript editor <span className="hint">Free grammar polish appears here. Advanced journal-specific fixes stay behind Pro.</span></label><div className="editor-shell"><div className="editor-review-layout"><div ref={editorRef} className="editor editor-contenteditable" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')} />{sentenceSuggestions.length > 0 ? <aside className="review-rail"><div className="review-rail-header">Reviewer comments <small>{sentenceSuggestions.length} free fix{sentenceSuggestions.length === 1 ? '' : 'es'}</small></div>{sentenceSuggestions.map((item) => <div className="comment-card" key={`${item.index}-${item.sentence.slice(0, 24)}`}><div className="comment-head"><div className="avatar">AI</div><div className="who">SubmitCheck</div><div className="kind-label">{item.reason}</div></div><p className="quote">{item.sentence}</p><p className="reason">Tighten the sentence for publication clarity while keeping the meaning intact.</p><div className="suggest-label">Suggested rewrite</div><div className="suggest-text">{item.suggestion}</div><div className="card-actions"><button className="btn btn-apply" onClick={() => onTextChange(applySentenceSuggestion(text, item.index, item.suggestion))}>Apply</button><button className="btn btn-reject" onClick={() => onTextChange(text)}>Reject</button></div></div>)}</aside> : <div className="review-rail empty-review-rail"><div className="review-rail-header">Reviewer comments <small>0</small></div><div className="empty-state-inline">No inline manuscript comments.</div></div>}</div></div><div className="row"><button className="btn btn-secondary" onClick={downloadEditedManuscript}>↓ Download DOCX with tracked changes</button><button className="btn btn-primary" onClick={() => (plan === 'pro' ? onFormat() : onUnlock())}>📐 Format →</button></div></div></div></div>;
+  return <div><div className={gaps.some((gap) => gap.priority === 'critical') ? 'verdict red' : 'verdict green'}>{gaps.length ? `⚠️ ${gaps.filter((gap) => gap.priority === 'critical').length} critical gaps to fix` : '✅ Editorial checks passed'}</div><div className="fix-layout">{gaps.length ? <div className="fix-column panel"><label className="panel-label">What to fix <span className="hint">These are editorial drafts. Review every change before submission.</span></label>{visible.map((gap) => <div className={`fix-item ${gap.priority}`} key={gap.title}><h3>{gap.priority === 'critical' ? '❌' : '🟡'} {gap.title}</h3><p>{gap.description}</p><pre>{gap.example}</pre><div className="fix-actions"><button className="btn-small" onClick={() => copySuggestion(gap)}>{copied === gap.title ? '✓ Copied' : 'Copy suggestion'}</button><button className="btn-small primary-btn" onClick={() => onApply(gap)}>✍ Apply draft</button><button className="btn-small" disabled={fixed.includes(gap.title)} onClick={() => onFix(gap.title)}>{fixed.includes(gap.title) ? '✅ Reviewed' : 'Mark reviewed'}</button></div></div>)}{plan === 'free' && gaps.length > 5 && <div className="locked-card"><div className="blur-line">First editorial review shown · Pro for the full set</div><div className="locked-overlay">🔒<strong>{gaps.length - 5} more journal-specific fixes stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock full review</button></div></div>}</div> : <div className="panel fix-ready"><strong>Editorial checks passed for the detected requirements.</strong><span>Still review the full manuscript before submission.</span></div>}<div className="panel editor-column"><label className="panel-label">Manuscript editor <span className="hint">Free grammar polish appears here. Advanced journal-specific fixes stay behind Pro.</span></label><div className="editor-shell"><div className="editor-review-layout"><div ref={editorRef} className="editor editor-contenteditable" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')} />{sentenceSuggestions.length > 0 ? <aside className="review-rail"><div className="review-rail-header">Reviewer comments <small>{plan === 'pro' ? `${visibleSentenceSuggestions.length} comment${visibleSentenceSuggestions.length === 1 ? '' : 's'}` : `${visibleSentenceSuggestions.length} free fix${visibleSentenceSuggestions.length === 1 ? '' : 'es'}`}</small></div>{visibleSentenceSuggestions.map((item) => <div className="comment-card" key={`${item.index}-${item.sentence.slice(0, 24)}`}><div className="comment-head"><div className="avatar">AI</div><div className="who">SubmitCheck</div><div className="kind-label">{item.reason}</div></div><p className="quote">{item.sentence}</p><p className="reason">Tighten the sentence for publication clarity while keeping the meaning intact.</p><div className="suggest-label">Suggested rewrite</div><div className="suggest-text">{item.suggestion}</div><div className="card-actions"><button className="btn btn-apply" onClick={() => onTextChange(applySentenceSuggestion(text, item.index, item.suggestion))}>Apply</button><button className="btn btn-reject" onClick={() => onTextChange(text)}>Reject</button></div></div>)}{plan === 'free' && lockedSentenceSuggestionCount > 0 && <div className="locked-card"><div className="blur-line">First {freeSentenceLimit} comments shown · Pro for the full review</div><div className="locked-overlay">🔒<strong>{lockedSentenceSuggestionCount} more comment{lockedSentenceSuggestionCount === 1 ? '' : 's'} stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock all comments</button></div></div>}</aside> : <div className="review-rail empty-review-rail"><div className="review-rail-header">Reviewer comments <small>0</small></div><div className="empty-state-inline">No inline manuscript comments.</div></div>}</div></div><div className="row"><button className="btn btn-secondary" onClick={downloadEditedManuscript}>↓ Download DOCX with tracked changes</button><button className="btn btn-primary" onClick={() => (plan === 'pro' ? onFormat() : onUnlock())}>📐 Format →</button></div></div></div></div>;
 }
