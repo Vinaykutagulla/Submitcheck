@@ -344,9 +344,14 @@ export async function POST(request: Request) {
       rankedJournals.slice(0, 20).map(({ journal }) => ({ name: journal.name, field: journal.field, scope: journal.scope })),
     );
     const judgeByName = new Map(judgeResult.decisions.map((decision) => [decision.name, decision]));
+    // Keep each candidate's original deterministic `match` untouched and store the AI-blended
+    // result separately in `aiMatch`. Previously this overwrote `match` in place with the blended
+    // AI score, so when Claude's judge scored a genuinely good candidate low, its deterministic
+    // band/evidence was destroyed too - making "fall back to deterministic matching" impossible for
+    // exactly the candidates that mattered, since there was no original signal left to fall back to.
     const judgedRanked = rankedJournals.map((entry) => {
       const decision = judgeByName.get(entry.journal.name);
-      if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [] };
+      if (!decision) return { ...entry, judgeScore: null, judgeReasons: [], judgeExclusions: [], aiMatch: null };
       const blendedScore = Math.round(entry.match.score * 0.4 + decision.relevanceScore * 0.6);
       const blendedBand = bandForScore(blendedScore);
       const blendedWarnings = [...entry.match.warnings, ...decision.exclusions.map((reason) => `AI exclusion: ${reason}`)];
@@ -355,7 +360,7 @@ export async function POST(request: Request) {
         judgeScore: decision.relevanceScore,
         judgeReasons: decision.reasons,
         judgeExclusions: decision.exclusions,
-        match: {
+        aiMatch: {
           ...entry.match,
           score: blendedScore,
           band: blendedBand,
@@ -365,19 +370,44 @@ export async function POST(request: Request) {
           warnings: blendedWarnings,
         },
       };
-    }).sort((left, right) => right.match.score - left.match.score || left.journal.name.localeCompare(right.journal.name));
+    }).sort((left, right) => {
+      const leftScore = left.aiMatch?.score ?? left.match.score;
+      const rightScore = right.aiMatch?.score ?? right.match.score;
+      return rightScore - leftScore || left.journal.name.localeCompare(right.journal.name);
+    });
     const aiAvailable = judgeResult.status === 'active' && judgeResult.decisions.length > 0;
-    const matches = judgedRanked
-      .filter(({ match, judgeScore, judgeExclusions }) => aiAvailable
-        ? match.band !== null && (judgeScore ?? 0) >= 45 && Boolean(match.directEvidence) && judgeExclusions.length === 0
-        : match.band !== null
-          && Boolean(match.directEvidence)
-          && Boolean(match.topicalEvidence)
-          && !match.warnings.some((warning) => warning.includes('secondary topic')))
+    const matchesDeterministic = (entry: (typeof judgedRanked)[number]) => entry.match.band !== null
+      && Boolean(entry.match.directEvidence)
+      && Boolean(entry.match.topicalEvidence)
+      && !entry.match.warnings.some((warning) => warning.includes('secondary topic'));
+    const matchesAiJudged = (entry: (typeof judgedRanked)[number]) => entry.aiMatch !== null
+      && entry.aiMatch.band !== null
+      && (entry.judgeScore ?? 0) >= 45
+      && Boolean(entry.aiMatch.directEvidence)
+      && entry.judgeExclusions.length === 0;
+
+    let matchSource: 'ai-semantic' | 'deterministic-fallback' = aiAvailable ? 'ai-semantic' : 'deterministic-fallback';
+    let filteredJournals = judgedRanked.filter(aiAvailable ? matchesAiJudged : matchesDeterministic);
+    // A successful AI judge call can still score every candidate below the cutoff (or flag one
+    // exclusion reason, which disqualifies it outright) and legitimately return zero matches even
+    // though the manuscript has real topical fits in the catalog. Rather than showing an empty
+    // "no journals found" result, fall back to the deterministic topic/keyword filter so the user
+    // always sees the broader matches that a working, just-overly-strict AI pass would have missed.
+    if (aiAvailable && filteredJournals.length === 0) {
+      matchSource = 'deterministic-fallback';
+      filteredJournals = judgedRanked.filter(matchesDeterministic);
+    }
+
+    const matches = filteredJournals
+      .sort((left, right) => {
+        const leftScore = matchSource === 'ai-semantic' ? (left.aiMatch?.score ?? left.match.score) : left.match.score;
+        const rightScore = matchSource === 'ai-semantic' ? (right.aiMatch?.score ?? right.match.score) : right.match.score;
+        return rightScore - leftScore || left.journal.name.localeCompare(right.journal.name);
+      })
       .slice(0, 25)
       .map((entry) => ({
         ...entry,
-        match: { ...entry.match, matchSource: aiAvailable ? 'ai-semantic' as const : 'deterministic-fallback' as const },
+        match: matchSource === 'ai-semantic' && entry.aiMatch ? { ...entry.aiMatch, matchSource } : { ...entry.match, matchSource },
       }));
     return NextResponse.json({
       source: 'supabase',
@@ -387,7 +417,8 @@ export async function POST(request: Request) {
       semanticProfileProviderStatus: semanticResult.providerStatus,
       semanticJudgeStatus: judgeResult.status,
       semanticJudgeProviderStatus: judgeResult.providerStatus,
-      fallbackUsed: !aiAvailable,
+      fallbackUsed: matchSource === 'deterministic-fallback',
+      fallbackReason: matchSource === 'deterministic-fallback' ? (aiAvailable ? 'ai_zero_matches' : 'ai_unavailable') : null,
       excludedCount: excludedForMissingData.length,
       excludedForMissingData: excludedForMissingData.map(({ journal, missingField }) => ({ journal: journal.name, missingField })),
     });

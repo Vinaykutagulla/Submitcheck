@@ -804,6 +804,7 @@ ${shareUrl}` });
         source?: string;
         matches?: typeof remoteMatches;
         fallbackUsed?: boolean;
+        fallbackReason?: 'ai_unavailable' | 'ai_zero_matches' | null;
         error?: string;
       };
       if (requestId !== matchRequestIdRef.current) return;
@@ -823,7 +824,9 @@ ${shareUrl}` });
         setRemoteMatches(normalizedMatches);
         nextMatches = normalizedMatches;
         if (result.fallbackUsed) {
-          setSaveMessage('Strict catalog matches shown. AI review was unavailable for this manuscript, so weaker matches were excluded.');
+          setSaveMessage(result.fallbackReason === 'ai_zero_matches'
+            ? 'Strict catalog matches shown. AI review did not find a confident match for this manuscript, so broader topic-based matches are shown instead.'
+            : 'Strict catalog matches shown. AI review was unavailable for this manuscript, so weaker matches were excluded.');
         } else {
           setSaveMessage('');
         }
