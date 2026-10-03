@@ -13,6 +13,7 @@ type GapAnalysisRequest = {
 };
 
 export async function POST(request: Request) {
+  const routeStart = Date.now();
   let body: GapAnalysisRequest;
 
   try {
@@ -81,19 +82,48 @@ Read the manuscript closely before answering. First identify its actual study de
 Also return "sentenceSuggestions": an array of at most 5 sentences from THIS manuscript that are long, unclear, passive, or wordy. For each, copy the "sentence" field EXACTLY character-for-character as it appears in the manuscript text above (so it can be located by exact string match - do not paraphrase or normalize whitespace), write a "suggestion" with a genuinely improved rewrite of that same sentence, and a short "reason" (e.g. "Long sentence - split for readability", "Passive voice", "Wordy phrasing"). Only include sentences that truly need improvement; return fewer than 5 if the writing is already clear. Never invent a sentence that is not verbatim present in the manuscript text.
 `;
 
-    const completion = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
-      temperature: 0.3,
-      system: 'You are a strict academic editor helping plan manuscript revisions. Output valid JSON only.',
-      messages: [{ role: 'user', content: prompt }],
-    });
+    // maxDuration on this route is 60s - this budget is measured from routeStart (set at the very
+    // top of POST, before the auth/Supabase checks) and leaves a large safety margin so a retry can
+    // NEVER push the function into Vercel's hard platform timeout (which returns a non-JSON 504 that
+    // bypasses our own try/catch fallback entirely - confirmed in production, see repo memory).
+    // Now that the SDK's hidden retry multiplication is disabled (maxRetries: 0 in claude.ts),
+    // these numbers are an accurate ceiling - no more 3x surprise multiplier. Dense, long
+    // manuscripts with this prompt's verbatim-sentence-reproduction requirement can genuinely
+    // take Claude 30-45s to generate, so attempt 1 gets most of the budget; the retry is mainly a
+    // safety net for a fast-completing-but-malformed-JSON response, not for genuine slowness.
+    const overallBudgetMs = 50000;
+    const firstAttemptTimeoutMs = 45000;
+    const minRemainingToRetry = 10000;
 
-    const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
-    const parsed = safeJsonParse(content);
+    const callAndParse = async (timeoutMs: number) => {
+      const completion = await anthropic.messages.create({
+        model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        temperature: 0.3,
+        system: 'You are a strict academic editor helping plan manuscript revisions. Output valid JSON only.',
+        messages: [{ role: 'user', content: prompt }],
+      }, { timeout: timeoutMs });
+      const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
+      const parsed = safeJsonParse(content);
+      const parsedOk = Boolean(parsed) && Array.isArray(parsed.gaps) && parsed.gaps.length > 0;
+      return { parsed, parsedOk, stopReason: completion.stop_reason, contentLength: content.length };
+    };
+
+    let attempt = await callAndParse(firstAttemptTimeoutMs);
+    if (!attempt.parsedOk) {
+      console.error('Gap analysis JSON did not parse on attempt 1. stop_reason:', attempt.stopReason, 'length:', attempt.contentLength);
+      const remaining = overallBudgetMs - (Date.now() - routeStart);
+      if (remaining >= minRemainingToRetry) {
+        attempt = await callAndParse(remaining);
+        if (!attempt.parsedOk) {
+          console.error('Gap analysis JSON did not parse on retry. stop_reason:', attempt.stopReason, 'length:', attempt.contentLength);
+        }
+      }
+    }
+
+    const { parsed, parsedOk } = attempt;
     // Track whether Claude's JSON actually parsed so `usesFallback` reflects reality instead of
     // silently reporting success while gaps/sentenceSuggestions quietly used the local heuristic.
-    const parsedOk = Boolean(parsed) && Array.isArray(parsed.gaps) && parsed.gaps.length > 0;
     const gaps = parsedOk ? parsed.gaps : heuristicallyGenerateGaps(manuscriptText, journalName, journalField);
     const sentenceSuggestions = Array.isArray(parsed?.sentenceSuggestions)
       ? parsed.sentenceSuggestions.filter((item: unknown): item is { sentence: string; suggestion: string; reason: string } =>
