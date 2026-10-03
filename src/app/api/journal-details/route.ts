@@ -20,6 +20,7 @@ type DoajRecord = {
 type ParsedInstructions = {
   abstract: 'structured' | 'unstructured';
   wordLimit: number | null;
+  abstractWordLimit: number | null;
   refStyle: string;
   figuresTables: boolean | null;
   supplementaryFiles: boolean | null;
@@ -39,6 +40,10 @@ function parseInstructions(html: string): ParsedInstructions {
   const wordMatch = text.match(/(?:abstract|manuscript|article|paper).{0,100}(?:maximum|max|up to|limited to|not exceed).{0,30}(\d[\d,]*)\s*words?/i)
     ?? text.match(/(\d[\d,]*)\s*words?.{0,50}(?:abstract|manuscript|article|paper)/i);
   const wordLimit = wordMatch ? Number(wordMatch[1].replace(/,/g, '')) : null;
+  const abstractWordMatch = text.match(/abstract.{0,60}(?:maximum|max|up to|limited to|not exceed|no more than|should not).{0,30}(\d[\d,]*)\s*words?/i)
+    ?? text.match(/(\d[\d,]*)\s*words?.{0,30}(?:for the abstract|abstract limit)/i)
+    ?? text.match(/abstract[^.]{0,20}\((\d[\d,]*)\s*words?\)/i);
+  const abstractWordLimitRaw = abstractWordMatch ? Number(abstractWordMatch[1].replace(/,/g, '')) : null;
   const refStyle = /vancouver|numbered references?|citation-sequence|superscript numerals?/i.test(text)
     ? 'Numbered/Vancouver'
     : /apa|author[- ]date|harvard/i.test(text)
@@ -47,6 +52,7 @@ function parseInstructions(html: string): ParsedInstructions {
   return {
     abstract: structured ? 'structured' : 'unstructured',
     wordLimit: wordLimit && wordLimit >= 500 ? wordLimit : null,
+    abstractWordLimit: abstractWordLimitRaw && abstractWordLimitRaw >= 50 && abstractWordLimitRaw <= 500 ? abstractWordLimitRaw : null,
     refStyle,
     figuresTables: /figures?.{0,80}(?:separate|high resolution|upload|file)|tables?.{0,80}(?:separate|upload|file)/i.test(text) ? true : null,
     supplementaryFiles: /supplementary|supporting information|additional file/i.test(text) ? true : null,
