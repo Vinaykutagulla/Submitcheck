@@ -333,6 +333,9 @@ button { cursor: pointer; }
 .verify-check-card > span { flex: 0 0 auto; color: var(--ink-soft); font-size: 10px; font-weight: 700; text-align: right; }
 .verify-check-card.pass > span { color: var(--moss); }
 .verify-check-card.warn > span { color: #8A6425; }
+.verify-suggestion { margin-top: 8px; padding: 8px; background: #f6f3ec; border-radius: 6px; }
+.verify-suggestion > span { display: block; margin-bottom: 6px; color: var(--ink-soft); font-size: 11px; line-height: 1.45; }
+.verify-suggestion .row { margin-top: 0; gap: 8px; }
 .verify-upgrade { width: 100%; justify-content: center; margin-top: 3px; }
 .verify-section-list { display: grid; gap: 8px; }
 .verify-section { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--rule); font-size: 12px; }
