@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { anthropic } from '@/lib/claude';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
+export const maxDuration = 60;
+
 type GapAnalysisRequest = {
   manuscriptText?: unknown;
   journalName?: unknown;
@@ -81,7 +83,7 @@ Also return "sentenceSuggestions": an array of at most 5 sentences from THIS man
 
     const completion = await anthropic.messages.create({
       model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
-      max_tokens: 1200,
+      max_tokens: 4096,
       temperature: 0.3,
       system: 'You are a strict academic editor helping plan manuscript revisions. Output valid JSON only.',
       messages: [{ role: 'user', content: prompt }],
@@ -89,7 +91,10 @@ Also return "sentenceSuggestions": an array of at most 5 sentences from THIS man
 
     const content = completion.content?.[0]?.type === 'text' ? completion.content[0].text : '';
     const parsed = safeJsonParse(content);
-    const gaps = Array.isArray(parsed?.gaps) && parsed.gaps.length ? parsed.gaps : heuristicallyGenerateGaps(manuscriptText, journalName, journalField);
+    // Track whether Claude's JSON actually parsed so `usesFallback` reflects reality instead of
+    // silently reporting success while gaps/sentenceSuggestions quietly used the local heuristic.
+    const parsedOk = Boolean(parsed) && Array.isArray(parsed.gaps) && parsed.gaps.length > 0;
+    const gaps = parsedOk ? parsed.gaps : heuristicallyGenerateGaps(manuscriptText, journalName, journalField);
     const sentenceSuggestions = Array.isArray(parsed?.sentenceSuggestions)
       ? parsed.sentenceSuggestions.filter((item: unknown): item is { sentence: string; suggestion: string; reason: string } =>
           Boolean(item) && typeof item === 'object'
@@ -99,7 +104,7 @@ Also return "sentenceSuggestions": an array of at most 5 sentences from THIS man
         .slice(0, 5)
       : [];
 
-    return NextResponse.json({ usesFallback: false, gaps, sentenceSuggestions });
+    return NextResponse.json({ usesFallback: !parsedOk, gaps, sentenceSuggestions });
   } catch (error) {
     if (error instanceof Error) {
       console.error('Claude gap analysis failed:', error.message);

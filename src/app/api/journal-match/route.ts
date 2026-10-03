@@ -5,6 +5,8 @@ import { lookupLiveApc } from '@/lib/journal-apc';
 import { parseApcInr } from '@/lib/apc';
 import { createSemanticProfile, judgeJournalCandidates } from '@/lib/semantic-profile';
 
+export const maxDuration = 60;
+
 const fallbackJournals = [
   {
     id: 'fallback-journal-controlled-release',

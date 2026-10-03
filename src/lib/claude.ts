@@ -2,7 +2,10 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
-  timeout: 18000,
+  // Claude completions with larger max_tokens (gap analysis, semantic judging) can legitimately
+  // take well over 18s. Keep this below each route's maxDuration so the try/catch fallback still
+  // has time to run instead of Vercel killing the function first.
+  timeout: 55000,
 });
 
 export type GapPriority = 'critical' | 'important';
