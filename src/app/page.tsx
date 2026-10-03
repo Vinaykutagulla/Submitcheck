@@ -53,12 +53,12 @@ References
 1. Williams, H.D. et al. (2013). Journal of Pharmaceutical Sciences.`;
 
 const journals: Journal[] = [
-  { name: 'Journal of Controlled Release', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: 400000, apcDisplay: '₹4,00,000', speed: '5 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['drug delivery', 'formulation', 'nanomedicine'], requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
-  { name: 'International Journal of Pharmaceutics', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: 368000, apcDisplay: '₹3,68,000', speed: '4 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
-  { name: 'Pharmaceutics', publisher: 'MDPI', field: 'Life Sciences', quartile: 'Q1', oa: true, apc: 165000, apcDisplay: '₹1,65,000', speed: '18 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 8000, refStyle: 'Numbered' } },
-  { name: 'AAPS PharmSciTech', publisher: 'Springer', field: 'Life Sciences', quartile: 'Q2', oa: false, apc: 185000, apcDisplay: '₹1,85,000', speed: '15 days', indexed: ['Scopus', 'WoS'], scope: ['pharmaceutical technology', 'formulation'], requirements: { abstract: 'structured', wordLimit: 6000, refStyle: 'Numbered' } },
-  { name: 'Molecules', publisher: 'MDPI', field: 'Chemistry', quartile: 'Q2', oa: true, apc: 155000, apcDisplay: '₹1,55,000', speed: '14 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['chemistry', 'synthesis'], sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 6000, refStyle: 'Numbered' } },
-  { name: 'Scientific Reports', publisher: 'Springer Nature', field: 'Multidisciplinary', quartile: 'Q1', oa: true, apc: 195000, apcDisplay: '₹1,95,000', speed: '30 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['interdisciplinary', 'all fields'], requirements: { abstract: 'unstructured', wordLimit: 5000, refStyle: 'Numbered' } },
+  { name: 'Journal of Controlled Release', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: 400000, apcDisplay: '₹4,00,000', speed: '5 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['drug delivery', 'formulation', 'nanomedicine'], submissionUrl: 'https://www.sciencedirect.com/journal/journal-of-controlled-release', authorInstructionsUrl: 'https://www.sciencedirect.com/journal/journal-of-controlled-release/publish/guide-for-authors', requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
+  { name: 'International Journal of Pharmaceutics', publisher: 'Elsevier', field: 'Life Sciences', quartile: 'Q1', oa: false, apc: 368000, apcDisplay: '₹3,68,000', speed: '4 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], submissionUrl: 'https://www.sciencedirect.com/journal/international-journal-of-pharmaceutics', authorInstructionsUrl: 'https://www.sciencedirect.com/journal/international-journal-of-pharmaceutics/publish/guide-for-authors', requirements: { abstract: 'structured', wordLimit: 5000, refStyle: 'Numbered' } },
+  { name: 'Pharmaceutics', publisher: 'MDPI', field: 'Life Sciences', quartile: 'Q1', oa: true, apc: 165000, apcDisplay: '₹1,65,000', speed: '18 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['pharmaceutics', 'drug delivery', 'formulation'], submissionUrl: 'https://www.mdpi.com/journal/pharmaceutics', authorInstructionsUrl: 'https://www.mdpi.com/journal/pharmaceutics/instructions', sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 8000, refStyle: 'Numbered' } },
+  { name: 'AAPS PharmSciTech', publisher: 'Springer', field: 'Life Sciences', quartile: 'Q2', oa: false, apc: 185000, apcDisplay: '₹1,85,000', speed: '15 days', indexed: ['Scopus', 'WoS'], scope: ['pharmaceutical technology', 'formulation'], submissionUrl: 'https://link.springer.com/journal/12249', authorInstructionsUrl: 'https://link.springer.com/journal/12249/submission-guidelines', requirements: { abstract: 'structured', wordLimit: 6000, refStyle: 'Numbered' } },
+  { name: 'Molecules', publisher: 'MDPI', field: 'Chemistry', quartile: 'Q2', oa: true, apc: 155000, apcDisplay: '₹1,55,000', speed: '14 days', indexed: ['Scopus', 'WoS', 'DOAJ'], scope: ['chemistry', 'synthesis'], submissionUrl: 'https://www.mdpi.com/journal/molecules', authorInstructionsUrl: 'https://www.mdpi.com/journal/molecules/instructions', sponsored: true, requirements: { abstract: 'unstructured', wordLimit: 6000, refStyle: 'Numbered' } },
+  { name: 'Scientific Reports', publisher: 'Springer Nature', field: 'Multidisciplinary', quartile: 'Q1', oa: true, apc: 195000, apcDisplay: '₹1,95,000', speed: '30 days', indexed: ['Scopus', 'WoS', 'PubMed'], scope: ['interdisciplinary', 'all fields'], submissionUrl: 'https://www.nature.com/srep', authorInstructionsUrl: 'https://www.nature.com/srep/editorial-policies/peer-review', requirements: { abstract: 'unstructured', wordLimit: 5000, refStyle: 'Numbered' } },
 ];
 
 const steps = [
@@ -133,6 +133,20 @@ function inferLikelySubmissionRequirements(journal: Journal) {
       supplementaryFiles ? 'Supplementary materials may be expected.' : 'Supplementary files are unlikely to be mandatory.',
     ],
   };
+}
+
+function getFallbackInstructionProfile(name: string) {
+  const key = name.toLowerCase();
+  const profiles: Record<string, { abstract: 'structured' | 'unstructured'; wordLimit: number | null; abstractWordLimit: number | null; refStyle: string; figuresTables: boolean | null; supplementaryFiles: boolean | null; declarations: boolean | null; }> = {
+    'pharmaceutics': { abstract: 'unstructured', wordLimit: 8000, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: true, supplementaryFiles: true, declarations: true },
+    'molecules': { abstract: 'unstructured', wordLimit: 6000, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: true, supplementaryFiles: true, declarations: true },
+    'aaps pharmscitech': { abstract: 'structured', wordLimit: 6000, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: true, supplementaryFiles: true, declarations: true },
+    'international journal of pharmaceutics': { abstract: 'structured', wordLimit: 5000, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: true, supplementaryFiles: true, declarations: true },
+    'journal of controlled release': { abstract: 'structured', wordLimit: 5000, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: true, supplementaryFiles: true, declarations: true },
+    'scientific reports': { abstract: 'unstructured', wordLimit: 5000, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: true, supplementaryFiles: true, declarations: true },
+  };
+
+  return profiles[key] ?? { abstract: 'unstructured', wordLimit: null, abstractWordLimit: 250, refStyle: 'Numbered', figuresTables: null, supplementaryFiles: null, declarations: null };
 }
 
 function detectSectionName(line: string) {
@@ -491,7 +505,9 @@ export default function Home() {
   const [savedMatches, setSavedMatches] = useState<Array<{ id: string; manuscript_id: string; journal_id: string; fit_score: number; gaps: Array<{ title?: string; description?: string }>; created_at: string }>>([]);
   const [activeManuscriptId, setActiveManuscriptId] = useState<string | null>(null);
   const [aiGaps, setAiGaps] = useState<Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>>([]);
+  const [aiGapsTotal, setAiGapsTotal] = useState(0);
   const [aiSentenceSuggestions, setAiSentenceSuggestions] = useState<Array<{ sentence: string; suggestion: string; reason: string }>>([]);
+  const [aiSentenceSuggestionsTotal, setAiSentenceSuggestionsTotal] = useState(0);
   const [gapLoading, setGapLoading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [serviceType, setServiceType] = useState('Manuscript');
@@ -866,12 +882,6 @@ ${shareUrl}` });
   };
 
   const analyzeGaps = async (journalOverride?: Journal) => {
-    if (plan !== 'pro') {
-      setShowPricing(true);
-      setSaveMessage('Upgrade to Pro to unlock AI gap analysis.');
-      return;
-    }
-
     if (!matchInputText.trim()) {
       setSaveMessage('Add manuscript text before running gap analysis.');
       return;
@@ -901,14 +911,16 @@ ${shareUrl}` });
         }),
       });
 
-      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; sentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }>; usesFallback?: boolean; error?: string };
+      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; totalGaps?: number; sentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }>; totalSentenceSuggestions?: number; usesFallback?: boolean; error?: string };
 
       if (!response.ok || !payload.gaps) {
         throw new Error(payload.error || 'Unable to generate suggestions.');
       }
 
       setAiGaps(payload.gaps);
+      setAiGapsTotal(payload.totalGaps ?? payload.gaps.length);
       setAiSentenceSuggestions(payload.sentenceSuggestions ?? []);
+      setAiSentenceSuggestionsTotal(payload.totalSentenceSuggestions ?? payload.sentenceSuggestions?.length ?? 0);
       setSaveMessage(payload.usesFallback ? 'Gap analysis is using a local fallback model.' : 'Gap analysis completed.');
     } catch (error) {
       setSaveMessage(error instanceof Error ? error.message : 'Unable to run gap analysis.');
@@ -1031,8 +1043,11 @@ ${shareUrl}` });
     setFormatDone(false);
     setVerifyDone(false);
     setAiGaps([]);
+    setAiGapsTotal(0);
+    setAiSentenceSuggestions([]);
+    setAiSentenceSuggestionsTotal(0);
     setStep(nextStep);
-    if (plan === 'pro' && text.trim()) void analyzeGaps(journal);
+    if (text.trim()) void analyzeGaps(journal);
   };
 
   const chosenGaps = selected ? getGaps(matchInputText, selected) : [];
@@ -1241,7 +1256,7 @@ ${shareUrl}` });
           {!text || text.length < 50 ? <div className="empty">📚<br />Paste your manuscript, then click <strong>“Find matching journals.”</strong></div> : <div>{matches.filter(({ journal }) => journal.sponsored).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} sponsored onSelect={(value) => selectJournal(value)} />)}{matches.filter(({ journal }) => !journal.sponsored).slice(0, plan === 'pro' ? matches.length : 3).map(({ journal, match, gaps }) => <JournalCard key={journal.name} journal={journal} match={match} gaps={gaps} onSelect={(value) => selectJournal(value)} />)}{plan === 'free' && matches.length > 3 && <div className="locked-card"><div className="blur-line">More matched journals with fit scores</div><div className="locked-overlay">🔒<strong>{matches.length - 3} more matched journals</strong><button className="btn btn-gold btn-small" onClick={() => setShowPricing(true)}>⭐ Unlock all matches</button></div></div>}</div>}
         </>}
 
-        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} onFormat={() => setStep(3)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} aiSentenceSuggestions={aiSentenceSuggestions} />}</section>}
+        {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} onFormat={() => setStep(3)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} aiSentenceSuggestions={aiSentenceSuggestions} gapLoading={gapLoading} usingAi={aiGaps.length > 0} totalGapsCount={aiGapsTotal} totalSentenceSuggestionsCount={aiSentenceSuggestionsTotal} />}</section>}
 
         {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} onTextChange={setText} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
@@ -1354,22 +1369,71 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
   const rejectCondensedAbstract = () => setCondensedAbstract(null);
   const fetchInstructions = async () => {
     const issn = selected.issn || selected.eissn;
-    if (!issn) {
-      setLiveInstructions({ url: selected.authorInstructionsUrl || selected.submissionUrl || null, source: 'Journal record', checkedAt: new Date().toISOString() });
-      return;
-    }
+    const fallbackProfile = getFallbackInstructionProfile(selected.name);
     setFetchingInstructions(true);
+    setLiveInstructions(null);
+
     try {
-      const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(issn)}&title=${encodeURIComponent(selected.name)}`);
-      const payload = await response.json() as { authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string; instructionSignals?: typeof liveInstructions extends infer T ? T extends { requirements?: infer R } ? R : never : never };
-      setLiveInstructions({ url: payload.authorInstructionsUrl || payload.journalUrl || selected.authorInstructionsUrl || selected.submissionUrl || null, source: payload.source || 'Live journal lookup', checkedAt: new Date().toISOString(), requirements: payload.instructionSignals ?? undefined });
+      const fetchByIssn = async (value: string) => {
+        const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(value)}&title=${encodeURIComponent(selected.name)}`);
+        return response.json() as Promise<{ authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string; instructionSignals?: typeof liveInstructions extends infer T ? T extends { requirements?: infer R } ? R : never : never }>;
+      };
+
+      if (issn) {
+        const payload = await fetchByIssn(issn);
+        const requirements = payload.instructionSignals ?? fallbackProfile;
+        setLiveInstructions({
+          url: payload.authorInstructionsUrl || payload.journalUrl || selected.authorInstructionsUrl || selected.submissionUrl || null,
+          source: payload.source || 'Live journal lookup',
+          checkedAt: new Date().toISOString(),
+          requirements,
+        });
+        setFetchingInstructions(false);
+        return;
+      }
+
+      const lookupResponse = await fetch(`/api/journal-lookup?q=${encodeURIComponent(selected.name)}`);
+      const lookupPayload = await lookupResponse.json() as { journals?: Array<{ issn?: string | null; eissn?: string | null; submissionUrl?: string | null; name?: string; }> };
+      const journalRecord = lookupPayload.journals?.[0];
+      const resolvedIssn = journalRecord?.issn || journalRecord?.eissn;
+      const fallbackUrl = journalRecord?.submissionUrl || selected.authorInstructionsUrl || selected.submissionUrl || null;
+
+      if (resolvedIssn) {
+        const payload = await fetchByIssn(resolvedIssn);
+        const requirements = payload.instructionSignals ?? fallbackProfile;
+        setLiveInstructions({
+          url: payload.authorInstructionsUrl || payload.journalUrl || fallbackUrl,
+          source: payload.source || 'Live journal lookup',
+          checkedAt: new Date().toISOString(),
+          requirements,
+        });
+        setFetchingInstructions(false);
+        return;
+      }
+
+      setLiveInstructions({
+        url: fallbackUrl,
+        source: fallbackUrl ? 'Journal catalog record' : 'No live journal instructions found',
+        checkedAt: new Date().toISOString(),
+        requirements: fallbackProfile,
+      });
     } catch {
-      setLiveInstructions({ url: selected.authorInstructionsUrl || selected.submissionUrl || null, source: 'Catalog record', checkedAt: new Date().toISOString() });
+      const fallbackUrl = selected.authorInstructionsUrl || selected.submissionUrl || null;
+      setLiveInstructions({
+        url: fallbackUrl,
+        source: fallbackUrl ? 'Catalog record' : 'No live journal instructions found',
+        checkedAt: new Date().toISOString(),
+        requirements: fallbackProfile,
+      });
     } finally {
       setFetchingInstructions(false);
     }
 
   };
+
+  useEffect(() => {
+    void fetchInstructions();
+  }, [selected.name, selected.issn, selected.eissn, selected.authorInstructionsUrl, selected.submissionUrl]);
 
   useEffect(() => {
     const preview = document.querySelector<HTMLElement>('.format-manuscript');
@@ -1620,9 +1684,16 @@ ${shareUrl}` });
   return <article className={sponsored ? 'journal-card sponsored' : 'journal-card'}>{sponsored && <div className="sponsor-flag">⭐ Sponsored · Featured</div>}<div className="journal-head"><div><h3>{journal.name}</h3><p>{journal.publisher} · {journal.field}</p><a className="journal-website-top" href={websiteUrl} target="_blank" rel="noreferrer">↗ {websiteLabel}</a><div className="tags"><span className="tag q1">{journal.quartile}</span>{journal.oa && <span className="tag oa">Free-to-publish</span>}{journal.indexed.map((item) => <span className="tag" key={item}>{item}</span>)}</div></div><div className="fit"><span>Scientific fit: <b className={match.score > 80 ? 'score-good' : 'score-caution'}>{match.score}%</b></span><em className={gaps.some((gap) => gap.priority === 'critical') ? 'concerns' : 'good'}>{match.confidence} confidence</em></div></div><div className="journal-meta"><span><small>APC</small>{liveApc?.amount ? `${liveApc.amount.toLocaleString()} ${liveApc.currency}` : 'Not verified'}</span><span><small>Speed</small>{liveApc?.publicationWeeks ? `${liveApc.publicationWeeks} weeks` : 'Not verified'}</span><span><small>Gaps found</small>{gaps.length}</span><span><small>Word limit</small>{journal.requirements.wordLimit ? `${journal.requirements.wordLimit} words` : 'Not listed'}</span></div><div className="match-reasons"><strong>Why this match</strong>{match.reasons.slice(0, 2).map((reason) => <span key={reason}>✓ {reason}</span>)}{match.warnings.slice(0, 1).map((warning) => <span className="warning" key={warning}>! {warning}</span>)}</div><div className="journal-actions"><button className="btn-small primary-btn" onClick={() => onSelect(journal)}>🔧 Fix</button><button className="btn-small" onClick={() => onSelect(journal)}>📐 Format</button><button className="btn-small" onClick={handleShare}>{shareState === 'copied' ? '🔗 Link copied' : shareState === 'shared' ? '✓ Shared' : shareState === 'failed' ? '⚠ Copy failed' : '📤 Share'}</button>{(journal.issn || journal.eissn) && <button className="btn-small" onClick={checkLiveApc} disabled={apcLoading}>{apcLoading ? 'Fetching APC & speed...' : liveApc ? (liveApc.amount || liveApc.publicationWeeks ? '✓ Live details loaded' : 'No live details found') : 'Fetch APC & speed'}</button>}{liveApc?.apcUrl ? <a className="btn-small journal-link" href={liveApc.apcUrl} target="_blank" rel="noreferrer">↗ View APC source</a> : liveApc?.apcSearchUrl ? <a className="btn-small journal-link" href={liveApc.apcSearchUrl} target="_blank" rel="noreferrer">↗ Find APC pricing</a> : null}</div>{liveApc?.journalUrl ? <div className="live-source">Website fetched from {liveApc.source} · <a href={liveApc.journalUrl} target="_blank" rel="noreferrer">Open website</a></div> : liveApc?.apcSearchUrl ? <div className="live-source">No structured APC record found; search publisher pricing before submission.</div> : null}</article>;
 }
 
-function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text, onTextChange, title, appliedDrafts, visualHtml, aiSentenceSuggestions }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; onFormat: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia?: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>; aiSentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }> }) {
+function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text, onTextChange, title, appliedDrafts, visualHtml, aiSentenceSuggestions, gapLoading, usingAi, totalGapsCount, totalSentenceSuggestionsCount }: { gaps: ReturnType<typeof getGaps>; plan: 'free' | 'pro'; fixed: string[]; onFix: (title: string) => void; onApply: (gap: ReturnType<typeof getGaps>[number]) => void; onUnlock: () => void; onFormat: () => void; text: string; onTextChange: (value: string) => void; title: string; appliedDrafts: Array<{ title: string; text: string; anchor: string }>; visualHtml?: string; embeddedMedia?: Array<{ type: 'image' | 'table' | 'figure'; html: string; afterText: string }>; aiSentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }>; gapLoading?: boolean; usingAi?: boolean; totalGapsCount?: number; totalSentenceSuggestionsCount?: number }) {
   void visualHtml;
-  const visible = plan === 'pro' ? gaps : gaps.slice(0, 5);
+  // `gaps` already reflects the server-side free-tier cap for real AI fixes (usingAi), so it must
+  // not be sliced again here - only the heuristic fallback (pre-AI-response) still needs local
+  // slicing. `totalGapsCount` is the true count behind the paywall, used purely for the lock copy.
+  const freeGapLimit = 3;
+  const visible = usingAi ? gaps : (plan === 'pro' ? gaps : gaps.slice(0, freeGapLimit));
+  const lockedGapCount = usingAi
+    ? Math.max(0, (totalGapsCount ?? gaps.length) - gaps.length)
+    : (plan === 'free' ? Math.max(0, gaps.length - freeGapLimit) : 0);
   const [copied, setCopied] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const [resolvedSentenceIndexes, setResolvedSentenceIndexes] = useState<number[]>([]);
@@ -1634,8 +1705,12 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
       .filter((item) => item.index >= 0);
   })();
   const freeSentenceLimit = 3;
-  const visibleSentenceSuggestions = plan === 'pro' ? sentenceSuggestions : sentenceSuggestions.slice(0, freeSentenceLimit);
-  const lockedSentenceSuggestionCount = sentenceSuggestions.length - visibleSentenceSuggestions.length;
+  // When aiSentenceSuggestions came back from the server, it is already free-tier capped - slicing
+  // it again would be harmless but the true locked count must come from totalSentenceSuggestionsCount.
+  const visibleSentenceSuggestions = (usingAi || plan === 'pro') ? sentenceSuggestions : sentenceSuggestions.slice(0, freeSentenceLimit);
+  const lockedSentenceSuggestionCount = usingAi
+    ? Math.max(0, (totalSentenceSuggestionsCount ?? sentenceSuggestions.length) - sentenceSuggestions.length)
+    : Math.max(0, sentenceSuggestions.length - visibleSentenceSuggestions.length);
   const activeSentenceSuggestions = visibleSentenceSuggestions.filter((item) => !resolvedSentenceIndexes.includes(item.index));
 
   useEffect(() => {
@@ -1868,5 +1943,5 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onFormat, text,
     URL.revokeObjectURL(url);
   };
 
-  return <div><div className={gaps.some((gap) => gap.priority === 'critical') ? 'verdict red' : 'verdict green'}>{gaps.length ? `⚠️ ${gaps.filter((gap) => gap.priority === 'critical').length} critical gaps to fix` : '✅ Editorial checks passed'}</div><div className="fix-layout">{gaps.length ? <div className="fix-column panel"><label className="panel-label">What to fix <span className="hint">These are editorial drafts. Review every change before submission.</span></label>{visible.map((gap) => <div className={`fix-item ${gap.priority}`} key={gap.title}><h3>{gap.priority === 'critical' ? '❌' : '🟡'} {gap.title}</h3><p>{gap.description}</p><pre>{gap.example}</pre><div className="fix-actions"><button className="btn-small" onClick={() => copySuggestion(gap)}>{copied === gap.title ? '✓ Copied' : 'Copy suggestion'}</button><button className="btn-small primary-btn" onClick={() => onApply(gap)}>✍ Apply draft</button><button className="btn-small" disabled={fixed.includes(gap.title)} onClick={() => onFix(gap.title)}>{fixed.includes(gap.title) ? '✅ Reviewed' : 'Mark reviewed'}</button></div></div>)}{plan === 'free' && gaps.length > 5 && <div className="locked-card"><div className="blur-line">First editorial review shown · Pro for the full set</div><div className="locked-overlay">🔒<strong>{gaps.length - 5} more journal-specific fixes stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock full review</button></div></div>}</div> : <div className="panel fix-ready"><strong>Editorial checks passed for the detected requirements.</strong><span>Still review the full manuscript before submission.</span></div>}<div className="panel editor-column"><label className="panel-label">Manuscript editor <span className="hint">Free grammar polish appears here. Advanced journal-specific fixes stay behind Pro.</span></label><div className="editor-shell"><div className="editor-review-layout"><div ref={editorRef} className="editor editor-contenteditable" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')} />{sentenceSuggestions.length > 0 ? <aside className="review-rail"><div className="review-rail-header">Reviewer comments <small>{plan === 'pro' ? `${visibleSentenceSuggestions.length} comment${visibleSentenceSuggestions.length === 1 ? '' : 's'}` : `${visibleSentenceSuggestions.length} free fix${visibleSentenceSuggestions.length === 1 ? '' : 'es'}`}</small></div>{visibleSentenceSuggestions.map((item) => <div className="comment-card" key={`${item.index}-${item.sentence.slice(0, 24)}`}><div className="comment-head"><div className="avatar">AI</div><div className="who">SubmitCheck</div><div className="kind-label">{item.reason}</div></div><p className="quote">{item.sentence}</p><p className="reason">Tighten the sentence for publication clarity while keeping the meaning intact.</p><div className="suggest-label">Suggested rewrite</div><div className="suggest-text">{item.suggestion}</div><div className="card-actions"><button className="btn btn-apply" onClick={() => onTextChange(applySentenceSuggestion(text, item.index, item.suggestion))}>Apply</button><button className="btn btn-reject" onClick={() => onTextChange(text)}>Reject</button></div></div>)}{plan === 'free' && lockedSentenceSuggestionCount > 0 && <div className="locked-card"><div className="blur-line">First {freeSentenceLimit} comments shown · Pro for the full review</div><div className="locked-overlay">🔒<strong>{lockedSentenceSuggestionCount} more comment{lockedSentenceSuggestionCount === 1 ? '' : 's'} stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock all comments</button></div></div>}</aside> : <div className="review-rail empty-review-rail"><div className="review-rail-header">Reviewer comments <small>0</small></div><div className="empty-state-inline">No inline manuscript comments.</div></div>}</div></div><div className="row"><button className="btn btn-secondary" onClick={downloadEditedManuscript}>↓ Download DOCX with tracked changes</button><button className="btn btn-primary" onClick={() => (plan === 'pro' ? onFormat() : onUnlock())}>📐 Format →</button></div></div></div></div>;
+  return <div><div className={gaps.some((gap) => gap.priority === 'critical') ? 'verdict red' : 'verdict green'}>{gaps.length ? `⚠️ ${gaps.filter((gap) => gap.priority === 'critical').length} critical gaps to fix` : '✅ Editorial checks passed'}</div><div className="fix-layout">{gapLoading && !usingAi ? <div className="fix-column panel"><label className="panel-label">What to fix <span className="hint">Running AI-powered gap analysis for this journal...</span></label><div className="empty">🤖<br />Analyzing your manuscript against this journal&apos;s requirements...</div></div> : gaps.length ? <div className="fix-column panel"><label className="panel-label">What to fix <span className="hint">These are editorial drafts. Review every change before submission.</span></label>{visible.map((gap) => <div className={`fix-item ${gap.priority}`} key={gap.title}><h3>{gap.priority === 'critical' ? '❌' : '🟡'} {gap.title}</h3><p>{gap.description}</p><pre>{gap.example}</pre><div className="fix-actions"><button className="btn-small" onClick={() => copySuggestion(gap)}>{copied === gap.title ? '✓ Copied' : 'Copy suggestion'}</button><button className="btn-small primary-btn" onClick={() => onApply(gap)}>✍ Apply draft</button><button className="btn-small" disabled={fixed.includes(gap.title)} onClick={() => onFix(gap.title)}>{fixed.includes(gap.title) ? '✅ Reviewed' : 'Mark reviewed'}</button></div></div>)}{lockedGapCount > 0 && <div className="locked-card"><div className="blur-line">First {visible.length} journal-specific fix{visible.length === 1 ? '' : 'es'} shown · Pro for the full set</div><div className="locked-overlay">🔒<strong>{lockedGapCount} more journal-specific fix{lockedGapCount === 1 ? '' : 'es'} stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock full review</button></div></div>}</div> : <div className="panel fix-ready"><strong>Editorial checks passed for the detected requirements.</strong><span>Still review the full manuscript before submission.</span></div>}<div className="panel editor-column"><label className="panel-label">Manuscript editor <span className="hint">Free grammar polish appears here. Advanced journal-specific fixes stay behind Pro.</span></label><div className="editor-shell"><div className="editor-review-layout"><div ref={editorRef} className="editor editor-contenteditable" contentEditable suppressContentEditableWarning style={{ minHeight: '420px', whiteSpace: 'pre-wrap' }} onInput={(event) => onTextChange(event.currentTarget.textContent ?? '')} />{sentenceSuggestions.length > 0 ? <aside className="review-rail"><div className="review-rail-header">Reviewer comments <small>{plan === 'pro' ? `${visibleSentenceSuggestions.length} comment${visibleSentenceSuggestions.length === 1 ? '' : 's'}` : `${visibleSentenceSuggestions.length} free fix${visibleSentenceSuggestions.length === 1 ? '' : 'es'}`}</small></div>{visibleSentenceSuggestions.map((item) => <div className="comment-card" key={`${item.index}-${item.sentence.slice(0, 24)}`}><div className="comment-head"><div className="avatar">AI</div><div className="who">SubmitCheck</div><div className="kind-label">{item.reason}</div></div><p className="quote">{item.sentence}</p><p className="reason">Tighten the sentence for publication clarity while keeping the meaning intact.</p><div className="suggest-label">Suggested rewrite</div><div className="suggest-text">{item.suggestion}</div><div className="card-actions"><button className="btn btn-apply" onClick={() => onTextChange(applySentenceSuggestion(text, item.index, item.suggestion))}>Apply</button><button className="btn btn-reject" onClick={() => onTextChange(text)}>Reject</button></div></div>)}{lockedSentenceSuggestionCount > 0 && <div className="locked-card"><div className="blur-line">First {visibleSentenceSuggestions.length} comments shown · Pro for the full review</div><div className="locked-overlay">🔒<strong>{lockedSentenceSuggestionCount} more comment{lockedSentenceSuggestionCount === 1 ? '' : 's'} stay locked</strong><button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock all comments</button></div></div>}</aside> : <div className="review-rail empty-review-rail"><div className="review-rail-header">Reviewer comments <small>0</small></div><div className="empty-state-inline">No inline manuscript comments.</div></div>}</div></div><div className="row"><button className="btn btn-secondary" onClick={downloadEditedManuscript}>↓ Download DOCX with tracked changes</button><button className="btn btn-primary" onClick={() => (plan === 'pro' ? onFormat() : onUnlock())}>📐 Format →</button></div></div></div></div>;
 }

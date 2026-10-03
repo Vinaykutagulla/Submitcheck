@@ -112,6 +112,22 @@ create table public.manuscript_journal_matches (
   unique (manuscript_id, journal_id)
 );
 
+-- Caches the full (unsliced) Claude gap-analysis result per user + manuscript/journal input hash, so
+-- re-running the same analysis (re-selecting a journal, reloading, or upgrading to Pro) reuses the
+-- already-paid-for AI call instead of billing Anthropic again. `tier` records whether the cached run
+-- was computed for a free or pro request so a later Pro request never serves a stale free-tier slice.
+create table public.gap_analysis_cache (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  cache_key text not null,
+  tier text not null check (tier in ('free', 'pro')),
+  gaps jsonb not null default '[]'::jsonb,
+  sentence_suggestions jsonb not null default '[]'::jsonb,
+  uses_fallback boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (user_id, cache_key)
+);
+
 create table public.payments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -170,6 +186,7 @@ alter table public.journal_snapshots enable row level security;
 alter table public.manuscript_journal_matches enable row level security;
 alter table public.payments enable row level security;
 alter table public.expert_quote_requests enable row level security;
+alter table public.gap_analysis_cache enable row level security;
 
 create policy "owners read profiles" on public.profiles for select using (auth.uid() = id);
 create policy "owners update profiles" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
@@ -187,6 +204,7 @@ create policy "owners manage matches" on public.manuscript_journal_matches for a
 );
 create policy "owners read payments" on public.payments for select using (auth.uid() = user_id);
 create policy "authenticated users read expert quote requests" on public.expert_quote_requests for select using (auth.role() = 'authenticated');
+create policy "owners manage gap analysis cache" on public.gap_analysis_cache for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create index idx_journals_field_quartile on public.journals (field, quartile);
 create index idx_journals_updated_at on public.journals (updated_at desc);

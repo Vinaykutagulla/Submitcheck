@@ -1,8 +1,13 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { anthropic } from '@/lib/claude';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 
 export const maxDuration = 60;
+
+const FREE_GAP_LIMIT = 3;
+const FREE_SENTENCE_LIMIT = 3;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type GapAnalysisRequest = {
   manuscriptText?: unknown;
@@ -11,6 +16,29 @@ type GapAnalysisRequest = {
   articleType?: unknown;
   journalRequirements?: unknown;
 };
+
+type GapItem = { id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string };
+type SentenceSuggestion = { sentence: string; suggestion: string; reason: string };
+
+// Always returns real, journal-specific fixes - free accounts just see a truncated slice plus the
+// true total count, so the UI can say "N more fixes stay locked" without ever sending the locked
+// content to the client (the paywall can't be bypassed by reading the network response).
+function buildGapAnalysisResponse(
+  gaps: GapItem[],
+  sentenceSuggestions: SentenceSuggestion[],
+  planActive: boolean,
+  usesFallback: boolean,
+) {
+  const visibleGaps = planActive ? gaps : gaps.slice(0, FREE_GAP_LIMIT);
+  const visibleSentenceSuggestions = planActive ? sentenceSuggestions : sentenceSuggestions.slice(0, FREE_SENTENCE_LIMIT);
+  return NextResponse.json({
+    usesFallback,
+    gaps: visibleGaps,
+    totalGaps: gaps.length,
+    sentenceSuggestions: visibleSentenceSuggestions,
+    totalSentenceSuggestions: sentenceSuggestions.length,
+  });
+}
 
 export async function POST(request: Request) {
   const routeStart = Date.now();
@@ -29,10 +57,10 @@ export async function POST(request: Request) {
   }
 
   const { data: profile } = await supabase.from('profiles').select('plan, plan_expires_at').eq('id', user.id).single();
+  // Free accounts still get real, journal-specific AI fixes - just a capped preview of them.
+  // Paying unlocks the remaining fixes server-side (see FREE_GAP_LIMIT/FREE_SENTENCE_LIMIT below)
+  // rather than gating the whole feature, so free users never fall back to generic checklist copy.
   const planActive = profile?.plan === 'pro' && (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date());
-  if (!planActive) {
-    return NextResponse.json({ error: 'Upgrade to Pro to use AI gap analysis.' }, { status: 403 });
-  }
 
   const manuscriptText = typeof body.manuscriptText === 'string' ? body.manuscriptText : '';
   const journalName = typeof body.journalName === 'string' ? body.journalName : 'target journal';
@@ -48,11 +76,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Manuscript text is required.' }, { status: 400 });
     }
 
+    // Cache key covers everything the prompt depends on, so any change to the manuscript or target
+    // journal naturally misses the cache and triggers a fresh (correct) analysis.
+    const cacheKey = createHash('sha256')
+      .update(JSON.stringify({ manuscriptText, journalName, journalField, articleType, journalRequirements }))
+      .digest('hex');
+
+    try {
+      const { data: cached } = await supabase
+        .from('gap_analysis_cache')
+        .select('tier, gaps, sentence_suggestions, uses_fallback, created_at')
+        .eq('user_id', user.id)
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+
+      if (cached) {
+        const freshEnough = Date.now() - new Date(cached.created_at).getTime() < CACHE_TTL_MS;
+        // A free-tier cached run only ever has the free-tier fix count - a Pro request must still
+        // trigger a fresh full analysis instead of serving that truncated cache entry.
+        const tierSufficient = cached.tier === 'pro' || !planActive;
+        if (freshEnough && tierSufficient) {
+          return buildGapAnalysisResponse(cached.gaps as GapItem[], cached.sentence_suggestions as SentenceSuggestion[], planActive, cached.uses_fallback);
+        }
+      }
+    } catch (cacheError) {
+      console.error('Gap analysis cache read failed:', cacheError);
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({
-        usesFallback: true,
-        gaps: heuristicallyGenerateGaps(manuscriptText, journalName, journalField),
-      });
+      return buildGapAnalysisResponse(heuristicallyGenerateGaps(manuscriptText, journalName, journalField), [], planActive, true);
     }
 
     const prompt = `
@@ -134,20 +186,31 @@ Also return "sentenceSuggestions": an array of at most 5 sentences from THIS man
         .slice(0, 5)
       : [];
 
-    return NextResponse.json({ usesFallback: !parsedOk, gaps, sentenceSuggestions });
+    // Only persist genuine AI results - never cache a fallback/heuristic response, so a transient
+    // Claude failure doesn't lock this manuscript+journal out of real AI fixes once it recovers.
+    if (parsedOk) {
+      try {
+        await supabase.from('gap_analysis_cache').upsert({
+          user_id: user.id,
+          cache_key: cacheKey,
+          tier: planActive ? 'pro' : 'free',
+          gaps,
+          sentence_suggestions: sentenceSuggestions,
+          uses_fallback: false,
+          created_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,cache_key' });
+      } catch (cacheError) {
+        console.error('Gap analysis cache write failed:', cacheError);
+      }
+    }
+
+    return buildGapAnalysisResponse(gaps, sentenceSuggestions, planActive, !parsedOk);
   } catch (error) {
     if (error instanceof Error) {
       console.error('Claude gap analysis failed:', error.message);
     }
 
-    return NextResponse.json({
-      usesFallback: true,
-      gaps: heuristicallyGenerateGaps(
-        manuscriptText,
-        journalName,
-        journalField,
-      ),
-    });
+    return buildGapAnalysisResponse(heuristicallyGenerateGaps(manuscriptText, journalName, journalField), [], planActive, true);
   }
 }
 

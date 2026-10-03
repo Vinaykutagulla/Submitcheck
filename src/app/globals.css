@@ -225,7 +225,6 @@ button { cursor: pointer; }
 .verdict.yellow { border-left-color: var(--gold); color: var(--gold); }
 .verdict.red { border-left-color: var(--shu); color: var(--shu); }
 .fix-layout { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
-.fix-column { display: none !important; }
 .editor-column { margin-bottom: 0; }
 .editor-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 270px); gap: 12px; align-items: start; }
 .editor-contenteditable { border: 1px solid var(--rule); border-radius: 6px; background: var(--card); }
