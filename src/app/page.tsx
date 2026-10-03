@@ -321,6 +321,11 @@ function splitIntoSentences(text: string) {
     .filter(Boolean);
 }
 
+function frontMatterBoundary(text: string) {
+  const match = text.match(/(?:^|\n)\s*(?:abstract|introduction|background)\b/i);
+  return match && match.index !== undefined ? match.index : 0;
+}
+
 function buildSentenceSuggestions(text: string) {
   const sentences = splitIntoSentences(text);
 
@@ -328,12 +333,17 @@ function buildSentenceSuggestions(text: string) {
     return [];
   }
 
+  const boundary = frontMatterBoundary(text);
   const suggestions: Array<{ sentence: string; suggestion: string; reason: string; index: number }> = [];
 
   for (const [index, rawSentence] of sentences.entries()) {
     const trimmed = rawSentence.trim();
     if (trimmed.length < 24) continue;
     if (/^(?:title|abstract|keywords?|introduction|methods?|results?|discussion|conclusion|references?|section|figure|table)\b/i.test(trimmed)) continue;
+    // Title/author/affiliation blocks often have no space after a sentence-ending period
+    // ("India.2Department..."), so splitIntoSentences merges them into one giant "sentence" -
+    // skip anything that starts before the Abstract/Introduction, it's never real prose to edit.
+    if (boundary > 0 && text.indexOf(trimmed) < boundary) continue;
 
     const rewrite = buildSentenceRewrite(trimmed);
     if (rewrite && rewrite.suggestion !== trimmed) {

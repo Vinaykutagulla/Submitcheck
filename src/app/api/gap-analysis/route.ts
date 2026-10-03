@@ -79,7 +79,7 @@ ${manuscriptText.slice(0, 90000)}
 
 Read the manuscript closely before answering. First identify its actual study design, biological material or dataset, methods, controls, primary outcomes, statistics, limitations, and main claim. Then compare those details against the target journal scope and requirements. Identify exact sections or phrases when possible. Do not return generic checks such as "improve clarity" or "add more detail". Every fix must name the manuscript section, cite a short exact phrase or state that a required item is absent, explain the publication risk for this journal, and give a concrete replacement paragraph, sentence, table, or analysis request. Prioritize issues that could cause editorial rejection, then scientific reporting gaps, then journal-format mismatches. Return at most 6 high-value fixes.
 
-Also return "sentenceSuggestions": an array of at most 5 sentences from THIS manuscript that are long, unclear, passive, or wordy. For each, copy the "sentence" field EXACTLY character-for-character as it appears in the manuscript text above (so it can be located by exact string match - do not paraphrase or normalize whitespace), write a "suggestion" with a genuinely improved rewrite of that same sentence, and a short "reason" (e.g. "Long sentence - split for readability", "Passive voice", "Wordy phrasing"). Only include sentences that truly need improvement; return fewer than 5 if the writing is already clear. Never invent a sentence that is not verbatim present in the manuscript text.
+Also return "sentenceSuggestions": an array of at most 5 sentences from THIS manuscript that are long, unclear, passive, or wordy. Only pick sentences from the actual prose (Abstract, Introduction, Methods, Results, Discussion, Conclusion) - never the title, author list, or affiliations block. For each, copy the "sentence" field EXACTLY character-for-character as it appears in the manuscript text above (so it can be located by exact string match - do not paraphrase or normalize whitespace), write a "suggestion" with a genuinely improved rewrite of that same sentence, and a short "reason" (e.g. "Long sentence - split for readability", "Passive voice", "Wordy phrasing"). Only include sentences that truly need improvement; return fewer than 5 if the writing is already clear. Never invent a sentence that is not verbatim present in the manuscript text.
 `;
 
     // maxDuration on this route is 60s - this budget is measured from routeStart (set at the very
@@ -98,7 +98,7 @@ Also return "sentenceSuggestions": an array of at most 5 sentences from THIS man
     const callAndParse = async (timeoutMs: number) => {
       const completion = await anthropic.messages.create({
         model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
+        max_tokens: 6000,
         temperature: 0.3,
         system: 'You are a strict academic editor helping plan manuscript revisions. Output valid JSON only.',
         messages: [{ role: 'user', content: prompt }],
