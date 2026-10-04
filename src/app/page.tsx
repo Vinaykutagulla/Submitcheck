@@ -541,6 +541,7 @@ export default function Home() {
   const [fixed, setFixed] = useState<string[]>([]);
   const [formatDone, setFormatDone] = useState(false);
   const [formatRequirements, setFormatRequirements] = useState<JournalFormattingRequirements | null>(null);
+  const [formatInstructionsVerified, setFormatInstructionsVerified] = useState(false);
   const [verifyDone, setVerifyDone] = useState(false);
   const [authorName, setAuthorName] = useState('');
   const [authorAffiliation, setAuthorAffiliation] = useState('');
@@ -1187,6 +1188,7 @@ ${shareUrl}` });
     setFixed([]);
     setFormatDone(false);
     setFormatRequirements(null);
+    setFormatInstructionsVerified(false);
     setVerifyDone(false);
     setAiGaps([]);
     setAiGapsTotal(0);
@@ -1229,7 +1231,7 @@ ${shareUrl}` });
 
   return (
     <main className="jmatch-shell">
-      {step === 5 && selected && <section className="view submit-view-new"><SubmissionPanel selected={selected} text={text} title={title} formatRequirements={formatRequirements} formatDone={formatDone} verifyDone={verifyDone} fixed={fixed} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} authorName={authorName} authorAffiliation={authorAffiliation} authorOrcid={authorOrcid} fundingStatement={fundingStatement} conflictStatement={conflictStatement} dataStatement={dataStatement} plan={plan} onUnlock={() => setShowPricing(true)} /><SubmissionAuthorForm authorName={authorName} onAuthorName={setAuthorName} authorAffiliation={authorAffiliation} onAuthorAffiliation={setAuthorAffiliation} authorOrcid={authorOrcid} onAuthorOrcid={setAuthorOrcid} fundingStatement={fundingStatement} onFundingStatement={setFundingStatement} conflictStatement={conflictStatement} onConflictStatement={setConflictStatement} dataStatement={dataStatement} onDataStatement={setDataStatement} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} /></section>}
+      {step === 5 && selected && <section className="view submit-view-new"><SubmissionPanel selected={selected} text={text} title={title} formatRequirements={formatRequirements} formatInstructionsVerified={formatInstructionsVerified} criticalGapCount={aiGaps.filter((gap) => gap.priority === 'critical' && !fixed.includes(gap.title)).length} formatDone={formatDone} verifyDone={verifyDone} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} authorName={authorName} authorAffiliation={authorAffiliation} authorOrcid={authorOrcid} fundingStatement={fundingStatement} conflictStatement={conflictStatement} dataStatement={dataStatement} plan={plan} onUnlock={() => setShowPricing(true)} /><SubmissionAuthorForm authorName={authorName} onAuthorName={setAuthorName} authorAffiliation={authorAffiliation} onAuthorAffiliation={setAuthorAffiliation} authorOrcid={authorOrcid} onAuthorOrcid={setAuthorOrcid} fundingStatement={fundingStatement} onFundingStatement={setFundingStatement} conflictStatement={conflictStatement} onConflictStatement={setConflictStatement} dataStatement={dataStatement} onDataStatement={setDataStatement} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} /></section>}
       <header className="letterhead">
         <div className="letterhead-inner">
           <div>
@@ -1401,7 +1403,7 @@ ${shareUrl}` });
 
         {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} onUnlockJournal={() => selected && void handlePayment('journal', selected.name)} onFormat={() => setStep(3)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} aiSentenceSuggestions={aiSentenceSuggestions} gapLoading={gapLoading} usingAi={aiGapsReady} aiGapsError={aiGapsError} aiGapsIsFallback={aiGapsIsFallback} onRetryAnalysis={() => void analyzeGaps(selected ?? undefined)} totalGapsCount={aiGapsTotal} totalSentenceSuggestionsCount={aiSentenceSuggestionsTotal} paymentLoading={paymentLoading} onEditorReady={setEditorPortalTarget} />}</section>}
 
-        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} onTextChange={setText} onRequirementsLoaded={setFormatRequirements} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
+        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} onTextChange={setText} onRequirementsLoaded={(requirements, verified) => { setFormatRequirements(requirements); setFormatInstructionsVerified(verified); }} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
         {step === 4 && (selected ? <section className="view"><VerifyPanel selected={selected} text={text} plan={plan} requirements={formatRequirements} onUnlock={() => setShowPricing(true)} onCompleted={() => setVerifyDone(true)} onTextChange={setText} /></section> : <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="empty">🔍<br />Select a journal first to run submission-readiness checks.</div></div></section>)}
 
@@ -1457,7 +1459,7 @@ function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: {
   return <section className="tracked-change-panel panel" aria-label="Tracked manuscript change"><div className="tracked-change-head"><strong>Proposed insertion: {draft.title}</strong><span>Review the wording and verify any scientific claims before accepting.</span></div><textarea className="tracked-change-editor" value={draft.text} onChange={(event) => onChange(event.target.value)} /><div className="row"><button className="btn btn-primary" onClick={onAccept}>✓ Insert into manuscript</button><button className="btn btn-secondary" onClick={onReject}>Reject</button></div></section>;
 }
 
-function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, onTextChange, onRequirementsLoaded }: { selected: Journal; text: string; visualHtml: string; plan: 'free' | 'pro'; onUnlock: () => void; onReviewed: () => void; onTextChange: (value: string) => void; onRequirementsLoaded: (requirements: JournalFormattingRequirements) => void }) {
+function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, onTextChange, onRequirementsLoaded }: { selected: Journal; text: string; visualHtml: string; plan: 'free' | 'pro'; onUnlock: () => void; onReviewed: () => void; onTextChange: (value: string) => void; onRequirementsLoaded: (requirements: JournalFormattingRequirements, verified: boolean) => void }) {
   const [fixedRules, setFixedRules] = useState<string[]>([]);
   const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string; confirmed: boolean; requirements: JournalFormattingRequirements } | null>(null);
   const [fetchingInstructions, setFetchingInstructions] = useState(false);
@@ -1584,7 +1586,7 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
           requirements,
         };
         setLiveInstructions(instructionState);
-        onRequirementsLoaded(requirements);
+        onRequirementsLoaded(requirements, Boolean(payload.instructionSignals));
         setFetchingInstructions(false);
         return;
       }
@@ -1606,7 +1608,7 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
           requirements,
         };
         setLiveInstructions(instructionState);
-        onRequirementsLoaded(requirements);
+        onRequirementsLoaded(requirements, Boolean(payload.instructionSignals));
         setFetchingInstructions(false);
         return;
       }
@@ -1620,7 +1622,7 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
         requirements,
       };
       setLiveInstructions(instructionState);
-      onRequirementsLoaded(requirements);
+      onRequirementsLoaded(requirements, false);
     } catch {
       const fallbackUrl = selected.authorInstructionsUrl || selected.submissionUrl || null;
       const requirements = fallbackProfile;
@@ -1632,7 +1634,7 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
         requirements,
       };
       setLiveInstructions(instructionState);
-      onRequirementsLoaded(requirements);
+      onRequirementsLoaded(requirements, false);
     } finally {
       setFetchingInstructions(false);
     }
@@ -1873,28 +1875,64 @@ function buildManuscriptDocument(title: string, text: string, requirements?: Jou
   });
 }
 
-function SubmissionPanel({ selected, text, title, formatRequirements, formatDone, verifyDone, fixed, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, plan, onUnlock }: { selected: Journal; text: string; title: string; formatRequirements: JournalFormattingRequirements | null; formatDone: boolean; verifyDone: boolean; fixed: string[]; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; plan: 'free' | 'pro'; onUnlock: () => void }) {
+function SubmissionPanel({ selected, text, title, formatRequirements, formatInstructionsVerified, criticalGapCount, formatDone, verifyDone, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, plan, onUnlock }: { selected: Journal; text: string; title: string; formatRequirements: JournalFormattingRequirements | null; formatInstructionsVerified: boolean; criticalGapCount: number; formatDone: boolean; verifyDone: boolean; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; plan: 'free' | 'pro'; onUnlock: () => void }) {
   const [graphicalAbstract, setGraphicalAbstract] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
   const [titlePageStatus, setTitlePageStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
   const [packageStatus, setPackageStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
+  const [warningsAcknowledged, setWarningsAcknowledged] = useState(false);
   const titleValue = title || titleFromManuscript(text) || 'Add a manuscript title';
-  const abstractValue = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() || 'Abstract not detected.';
+  const abstractValue = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
   const likelyRequirements = useMemo(() => inferLikelySubmissionRequirements(selected), [selected]);
-  const checks = [
-    ['Manuscript complete', text.length > 200],
-    ['Target journal selected', Boolean(selected)],
-    ['Critical gaps reviewed', fixed.length > 0],
-    ['Formatting reviewed', formatDone],
-    ['Integrity checks completed', verifyDone],
-    ['Declarations confirmed', declarationsConfirmed],
-  ];
-  const complete = checks.filter(([, done]) => done).length;
+  const hasTitle = Boolean(titleValue.trim() && titleValue !== 'Add a manuscript title');
+  const hasAbstract = Boolean(abstractValue.trim());
+  const abstractWordLimit = formatRequirements?.abstractWordLimit;
+  const manuscriptWordLimit = formatRequirements?.wordLimit ?? selected.requirements.wordLimit;
+  const wordCount = (value: string) => value.trim() ? value.trim().split(/\s+/).length : 0;
+  const overAbstractLimit = Boolean(abstractWordLimit && wordCount(abstractValue) > abstractWordLimit);
+  const overManuscriptLimit = Boolean(manuscriptWordLimit && wordCount(text) > manuscriptWordLimit);
+  const structuredAbstractMissing = formatRequirements?.abstract === 'structured'
+    && !(/\b(background|objective|aim|purpose)\s*:/i.test(abstractValue)
+      && /\bmethods?\s*:/i.test(abstractValue)
+      && /\bresults?\s*:/i.test(abstractValue)
+      && /\bconclusion\s*:/i.test(abstractValue));
+  const requiresAuthorDetails = likelyRequirements.titlePage;
+  const blockingIssues = [
+    !hasTitle ? 'Add a manuscript title.' : null,
+    !hasAbstract ? 'Add an abstract.' : null,
+    overAbstractLimit ? `Abstract exceeds the detected ${abstractWordLimit}-word limit.` : null,
+    overManuscriptLimit ? `Manuscript exceeds the detected ${manuscriptWordLimit}-word limit.` : null,
+    structuredAbstractMissing ? 'Add the journal-required structured abstract headings.' : null,
+    requiresAuthorDetails && !authorName.trim() ? 'Add the corresponding author name for the separate title page.' : null,
+    requiresAuthorDetails && !authorAffiliation.trim() ? 'Add the author affiliation for the separate title page.' : null,
+    !declarationsConfirmed ? 'Review and confirm the author details and declarations.' : null,
+  ].filter((issue): issue is string => Boolean(issue));
+  const warnings = [
+    !formatInstructionsVerified ? 'Official journal instructions were not confirmed; catalog defaults may be incomplete.' : null,
+    !formatDone ? 'Journal formatting has not been reviewed or exported yet.' : null,
+    !verifyDone ? 'Integrity and readiness checks have not been run yet.' : null,
+    criticalGapCount ? `${criticalGapCount} critical editorial gap${criticalGapCount === 1 ? '' : 's'} still need attention or author review.` : null,
+    !/(?:^|\n)\s*keywords?\s*:/i.test(text) ? 'No keywords detected; confirm whether the journal requires them.' : null,
+    likelyRequirements.coverLetter && !coverLetter.trim() ? 'This journal may expect a cover letter.' : null,
+    likelyRequirements.graphicalAbstract && !graphicalAbstract ? 'A graphical abstract may be requested; confirm the journal instructions.' : null,
+    !formatRequirements?.refStyle || /not specified/i.test(formatRequirements.refStyle) ? 'Reference style is not verified; check the journal instructions.' : null,
+  ].filter((issue): issue is string => Boolean(issue));
+  const canContinue = blockingIssues.length === 0 && (warnings.length === 0 || warningsAcknowledged);
+  const officialInstructionsUrl = selected.authorInstructionsUrl || selected.submissionUrl;
+  const portalUrl = selected.submissionUrl || selected.authorInstructionsUrl;
   const downloadTitlePage = async () => {
     if (titlePageStatus === 'generating') return;
     setTitlePageStatus('generating');
     try {
-      const doc = new Document({ sections: [{ children: [new Paragraph({ text: titleValue, heading: 'Title' }), new Paragraph({ text: authorName || 'Corresponding author not added' }), new Paragraph({ text: authorAffiliation || 'Affiliation not added' }), new Paragraph({ text: authorOrcid ? `ORCID: ${authorOrcid}` : 'ORCID not provided' }), new Paragraph({ text: `Funding: ${fundingStatement}` }), new Paragraph({ text: `Competing interests: ${conflictStatement}` }), new Paragraph({ text: `Data availability: ${dataStatement}` })] }] });
+      const doc = new Document({ sections: [{ children: [
+        new Paragraph({ text: titleValue, heading: 'Title' }),
+        new Paragraph({ text: `Corresponding author: ${authorName || 'Add author name before submission'}` }),
+        new Paragraph({ text: `Affiliation: ${authorAffiliation || 'Add affiliation before submission'}` }),
+        ...(authorOrcid ? [new Paragraph({ text: `ORCID: ${authorOrcid}` })] : []),
+        new Paragraph({ text: `Funding: ${fundingStatement}` }),
+        new Paragraph({ text: `Competing interests: ${conflictStatement}` }),
+        new Paragraph({ text: `Data availability: ${dataStatement}` }),
+      ] }] });
       const blob = await Packer.toBlob(doc);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1913,8 +1951,6 @@ function SubmissionPanel({ selected, text, title, formatRequirements, formatDone
     if (packageStatus === 'generating') return;
     setPackageStatus('generating');
     try {
-      const titlePage = new Document({ sections: [{ children: [new Paragraph({ text: titleValue, heading: 'Title' }), new Paragraph({ text: authorName || 'Corresponding author not added' }), new Paragraph({ text: authorAffiliation || 'Affiliation not added' }), new Paragraph({ text: authorOrcid ? `ORCID: ${authorOrcid}` : 'ORCID not provided' }), new Paragraph({ text: `Funding: ${fundingStatement}` }), new Paragraph({ text: `Competing interests: ${conflictStatement}` }), new Paragraph({ text: `Data availability: ${dataStatement}` })] }] });
-      const titlePageBlob = await Packer.toBlob(titlePage);
       const manuscriptDoc = buildManuscriptDocument(titleValue, text, formatRequirements ?? {
         abstract: selected.requirements.abstract,
         wordLimit: selected.requirements.wordLimit,
@@ -1926,16 +1962,29 @@ function SubmissionPanel({ selected, text, title, formatRequirements, formatDone
       });
       const manuscriptBlob = await Packer.toBlob(manuscriptDoc);
       const zip = new JSZip();
-      const requirementNotes = [
-        likelyRequirements.titlePage ? 'title page likely required' : 'title page optional',
-        likelyRequirements.coverLetter ? 'cover letter likely expected' : 'cover letter optional',
-        likelyRequirements.graphicalAbstract ? 'graphical abstract likely requested' : 'graphical abstract likely optional',
-      ];
       zip.file('01-main-manuscript.docx', manuscriptBlob);
-      zip.file('02-title-page.docx', titlePageBlob);
+      if (likelyRequirements.titlePage) {
+        const titlePage = new Document({ sections: [{ children: [
+          new Paragraph({ text: titleValue, heading: 'Title' }),
+          new Paragraph({ text: `Corresponding author: ${authorName}` }),
+          new Paragraph({ text: `Affiliation: ${authorAffiliation}` }),
+          ...(authorOrcid ? [new Paragraph({ text: `ORCID: ${authorOrcid}` })] : []),
+          new Paragraph({ text: `Funding: ${fundingStatement}` }),
+          new Paragraph({ text: `Competing interests: ${conflictStatement}` }),
+          new Paragraph({ text: `Data availability: ${dataStatement}` }),
+        ] }] });
+        zip.file('02-title-page.docx', await Packer.toBlob(titlePage));
+      }
       if (coverLetter.trim()) zip.file('03-cover-letter.txt', coverLetter.trim());
       if (graphicalAbstract) zip.file(`04-graphical-abstract-${graphicalAbstract.name}`, await graphicalAbstract.arrayBuffer());
-      zip.file('submission-manifest.txt', [`Journal: ${selected.name}`, `Title: ${titleValue}`, `Files: ${graphicalAbstract ? 'main manuscript.docx, title page.docx, cover letter, graphical abstract' : 'main manuscript.docx, title page.docx, cover letter'}`, `Likely requirements: ${requirementNotes.join('; ')}`, `Generated: ${new Date().toISOString()}`].join('\n'));
+      zip.file('submission-manifest.txt', [
+        `Journal: ${selected.name}`,
+        `Title: ${titleValue}`,
+        `Instructions: ${formatInstructionsVerified ? 'Live requirements fetched' : 'Not verified; check the official journal instructions'}`,
+        `Included files: ${['01-main-manuscript.docx', likelyRequirements.titlePage ? '02-title-page.docx' : null, coverLetter.trim() ? '03-cover-letter.txt' : null, graphicalAbstract ? `04-graphical-abstract-${graphicalAbstract.name}` : null].filter(Boolean).join(', ')}`,
+        `Author-confirmed warnings: ${warningsAcknowledged ? 'Yes' : 'No'}`,
+        `Generated: ${new Date().toISOString()}`,
+      ].join('\n'));
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1949,24 +1998,102 @@ function SubmissionPanel({ selected, text, title, formatRequirements, formatDone
     } catch {
       setPackageStatus('error');
     }
-  }, [authorAffiliation, authorName, authorOrcid, conflictStatement, coverLetter, dataStatement, fundingStatement, graphicalAbstract, likelyRequirements, packageStatus, selected.name, text, titleValue]);
-  useEffect(() => {
-    const files = document.querySelector<HTMLElement>('.submit-files');
-    if (!files) return;
-    let button = files.querySelector<HTMLButtonElement>('.submit-package-button');
-    if (!button) {
-      button = document.createElement('button');
-      button.className = 'btn btn-secondary submit-package-button';
-      button.type = 'button';
-      files.prepend(button);
-    }
-    button.textContent = packageStatus === 'generating' ? 'Preparing package...' : packageStatus === 'ready' ? 'Download package again' : 'Download submission ZIP';
-    button.disabled = packageStatus === 'generating';
-    button.onclick = downloadSubmissionPackage;
-    return () => { button?.remove(); };
-  }, [downloadSubmissionPackage, packageStatus]);
+  }, [authorAffiliation, authorName, authorOrcid, conflictStatement, coverLetter, dataStatement, formatInstructionsVerified, formatRequirements, fundingStatement, graphicalAbstract, likelyRequirements, packageStatus, selected.name, text, titleValue, warningsAcknowledged]);
 
-  return <div className="submit-workspace"><div className="submit-preview"><div className="format-page"><div className="format-title">{titleValue}</div><div className="format-meta">Submission package · {selected.name}</div><div className="format-divider" /><h3>Author details</h3><p>{authorName || 'Corresponding author not added'}<br />{authorAffiliation || 'Affiliation not added'}{authorOrcid && <><br />ORCID: {authorOrcid}</>}</p><h3>Abstract</h3><p>{abstractValue}</p><h3>Declarations</h3><p>Funding: {fundingStatement}<br />Conflicts: {conflictStatement}<br />Data: {dataStatement}</p><h3>Likely journal extras</h3><p>{likelyRequirements.notes.join(' ')}</p><h3>Additional files</h3><p>{graphicalAbstract ? `Graphical abstract: ${graphicalAbstract.name}` : 'Graphical abstract: not uploaded'}</p></div></div><aside className="submit-rail"><div className="submit-rail-head"><div><strong>Submission package</strong><span>{selected.name}</span></div><span className="verify-count">{complete}/{checks.length}</span></div><div className="submit-checks">{checks.map(([label, done]) => <div className={`submit-check ${done ? 'complete' : 'missing'}`} key={label as string}><span>{done ? '✓' : '!'}</span><strong>{label as string}</strong><em>{done ? 'Complete' : 'Needs attention'}</em></div>)}</div><div className="submit-files"><div className="verify-group-label">Submission files</div><div className="submit-file required"><div><strong>Main manuscript</strong><span>Ready from manuscript editor</span></div><b>Ready</b></div><div className="submit-file recommended"><div><strong>Separate title page</strong><span>Recommended · includes author details and declarations</span></div><button className="btn-small" onClick={downloadTitlePage}>Download DOCX</button></div><label className="submit-file optional"><div><strong>Graphical abstract</strong><span>{selected.oa ? 'Optional unless author instructions require it' : 'Optional · upload if requested by the journal'}</span></div><input type="file" accept="image/png,image/jpeg,image/tiff" onChange={(event) => setGraphicalAbstract(event.target.files?.[0] || null)} /></label><label className="submit-field-label">Cover letter (optional)<textarea value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} placeholder="Add a short cover letter for the editor..." /></label></div><div className="submit-declarations"><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div><div className="submit-actions"><button className="btn btn-success" disabled={!declarationsConfirmed} onClick={() => window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank')}>Open journal portal</button>{plan === 'free' && <button className="btn btn-secondary" onClick={onUnlock}>Submission options</button>}</div></aside></div>;
+  return (
+    <div className="submit-workspace">
+      <div className="submit-preview">
+        <div className="format-page">
+          <div className="format-title">{titleValue}</div>
+          <div className="format-meta">Final preflight · {selected.name}</div>
+          <div className="format-divider" />
+          <h3>Submission readiness</h3>
+          <p>{blockingIssues.length
+            ? `${blockingIssues.length} required item${blockingIssues.length === 1 ? '' : 's'} need attention before you can continue.`
+            : warnings.length
+              ? 'Required items are present. Review the warnings and confirm before continuing.'
+              : 'The detected requirements are satisfied. Review the package before opening the journal portal.'}</p>
+          <h3>Manuscript snapshot</h3>
+          <p>Title: {hasTitle ? titleValue : 'Missing'}<br />
+            Abstract: {hasAbstract ? `${wordCount(abstractValue)} words${abstractWordLimit ? ` / ${abstractWordLimit}` : ''}` : 'Missing'}<br />
+            Manuscript: {wordCount(text).toLocaleString()} words{manuscriptWordLimit ? ` / ${manuscriptWordLimit}` : ''}<br />
+            Target journal: {selected.name}</p>
+          <h3>Author and declarations</h3>
+          <p>{authorName || 'Corresponding author not added'}<br />
+            {authorAffiliation || 'Affiliation not added'}{authorOrcid && <><br />ORCID: {authorOrcid}</>}<br />
+            Funding: {fundingStatement}<br />
+            Conflicts: {conflictStatement}<br />
+            Data availability: {dataStatement}</p>
+          <h3>Files this package will contain</h3>
+          <ul className="submission-file-list">
+            <li>Formatted main manuscript DOCX</li>
+            {likelyRequirements.titlePage && <li>Separate title page DOCX (likely needed; verify journal instructions)</li>}
+            {coverLetter.trim() && <li>Cover letter text</li>}
+            {graphicalAbstract && <li>Graphical abstract: {graphicalAbstract.name}</li>}
+          </ul>
+          {likelyRequirements.notes.map((note) => <p className="submit-note" key={note}>{note}</p>)}
+        </div>
+      </div>
+      <aside className="submit-rail">
+        <div className="submit-rail-head">
+          <div><strong>Journal-specific preflight</strong><span>{selected.name}</span></div>
+          <span className="verify-count">{blockingIssues.length ? `${blockingIssues.length} blockers` : warnings.length ? `${warnings.length} warnings` : 'Ready'}</span>
+        </div>
+        <div className={`submit-preflight-status ${blockingIssues.length ? 'blocked' : warnings.length ? 'caution' : 'ready'}`}>
+          <strong>{blockingIssues.length ? 'Needs author action' : warnings.length ? 'Ready with warnings' : 'Ready to continue'}</strong>
+          <span>{formatInstructionsVerified ? 'Live journal instruction signals fetched' : 'Live instructions not verified; catalog/fallback information only'}</span>
+          {(selected.authorInstructionsUrl || selected.submissionUrl) && <a href={selected.authorInstructionsUrl || selected.submissionUrl} target="_blank" rel="noreferrer">Open journal instructions/source</a>}
+        </div>
+
+        {blockingIssues.length > 0 && <div className="submit-issue-group">
+          <div className="verify-group-label">Fix before continuing</div>
+          {blockingIssues.map((issue) => <div className="submit-issue blocker" key={issue}><span>!</span>{issue}</div>)}
+        </div>}
+        {warnings.length > 0 && <div className="submit-issue-group">
+          <div className="verify-group-label">Review with the journal or your co-authors</div>
+          {warnings.map((issue) => <div className="submit-issue warning" key={issue}><span>i</span>{issue}</div>)}
+          <label className="contact-consent submit-warning-confirm">
+            <input type="checkbox" checked={warningsAcknowledged} onChange={(event) => setWarningsAcknowledged(event.target.checked)} />
+            I reviewed these warnings and will verify journal-specific requirements before submitting.
+          </label>
+        </div>}
+
+        <div className="submit-files">
+          <div className="verify-group-label">Prepare submission files</div>
+          <div className="submit-file required">
+            <div><strong>Main manuscript</strong><span>{wordCount(text).toLocaleString()} words · exported using the journal formatting profile</span></div>
+            <b>Included</b>
+          </div>
+          {likelyRequirements.titlePage && <div className="submit-file recommended">
+            <div><strong>Separate title page</strong><span>Likely required · author details and declarations included</span></div>
+            <button className="btn-small" onClick={downloadTitlePage} disabled={titlePageStatus === 'generating'}>{titlePageStatus === 'generating' ? 'Preparing…' : titlePageStatus === 'ready' ? 'Download again' : 'Download DOCX'}</button>
+          </div>}
+          {titlePageStatus === 'error' && <p className="auth-error" role="alert">Could not create the title page. Please try again.</p>}
+          <label className="submit-file optional">
+            <div><strong>Graphical abstract</strong><span>{likelyRequirements.graphicalAbstract ? 'May be requested · confirm instructions before upload' : 'Only upload if the journal asks for one'}</span></div>
+            <input type="file" accept="image/png,image/jpeg,image/tiff" onChange={(event) => setGraphicalAbstract(event.target.files?.[0] || null)} />
+          </label>
+          <label className="submit-field-label">Cover letter {likelyRequirements.coverLetter ? '(likely expected; confirm journal requirements)' : '(optional)'}
+            <textarea value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} placeholder="Write an editor-specific cover letter. Include the manuscript contribution and journal fit; verify all claims before use." />
+          </label>
+          <button className="btn btn-primary" onClick={downloadSubmissionPackage} disabled={packageStatus === 'generating' || blockingIssues.length > 0 || (warnings.length > 0 && !warningsAcknowledged)}>
+            {packageStatus === 'generating' ? 'Preparing package…' : packageStatus === 'ready' ? 'Download package again' : 'Download submission ZIP'}
+          </button>
+          {packageStatus === 'error' && <p className="auth-error" role="alert">Could not prepare the submission ZIP. Please try again.</p>}
+        </div>
+
+        <div className="submit-declarations">
+          <label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label>
+        </div>
+        <div className="submit-actions">
+          <button className="btn btn-success" disabled={!canContinue} onClick={() => window.open(portalUrl || getAuthorInstructionsSearchUrl(selected), '_blank', 'noopener,noreferrer')}>
+            {portalUrl ? 'Open journal portal' : 'Find official submission portal'}
+          </button>
+          {plan === 'free' && <button className="btn btn-secondary" onClick={onUnlock}>Submission options</button>}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 function JournalCard({ journal, match, gaps, sponsored, onSelect }: { journal: Journal; match: ReturnType<typeof rankJournals>[number]['match']; gaps: ReturnType<typeof getGaps>; sponsored?: boolean; onSelect: (journal: Journal, nextStep?: number) => void }) {

@@ -354,6 +354,20 @@ button { cursor: pointer; }
 .submit-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 320px); min-height: 650px; border: 1px solid var(--rule); background: #e9e6de; }
 .submit-preview { overflow-y: auto; padding: 34px 6%; background: var(--paper); }
 .submit-rail { overflow-y: auto; padding: 18px 14px 28px; border-left: 1px solid var(--rule); background: #f5f2ea; }
+.submit-preflight-status { display: grid; gap: 5px; margin: 0 0 14px; padding: 12px; border: 1px solid var(--moss); background: var(--moss-soft); color: var(--moss); font-size: 12px; }
+.submit-preflight-status > span, .submit-preflight-status a { color: var(--ink-soft); font-size: 11px; line-height: 1.45; }
+.submit-preflight-status.blocked { border-color: var(--shu); background: var(--shu-soft); color: var(--shu); }
+.submit-preflight-status.caution { border-color: var(--gold); background: var(--amber-wash); color: #8A6425; }
+.submit-issue-group { margin: 14px 0; }
+.submit-issue { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; padding: 9px; border: 1px solid var(--rule); background: var(--card); color: var(--ink-soft); font-size: 11px; line-height: 1.45; }
+.submit-issue span { flex: 0 0 auto; display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: var(--shu-soft); color: var(--shu); font-weight: 700; }
+.submit-issue.warning span { background: var(--amber-wash); color: #8A6425; }
+.submit-warning-confirm { display: flex; margin-top: 10px; }
+.submission-file-list { padding-left: 20px; color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
+.submit-note { color: var(--ink-soft); font-size: 11px; }
+.submit-field-label textarea { display: block; width: 100%; min-height: 110px; margin-top: 6px; }
+.submit-files > .btn { width: 100%; justify-content: center; margin-top: 10px; }
+.submit-actions .btn:disabled, .submit-files .btn:disabled { cursor: not-allowed; opacity: .55; }
 .submit-rail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 4px 4px 16px; }
 .submit-rail-head strong, .submit-rail-head span { display: block; }
 .submit-rail-head strong { font-size: 13px; }
