@@ -29,6 +29,7 @@ export default function AppWorkflowPage() {
           return;
         }
         setAccount(accountPayload.user);
+        setSignedIn(true);
         const planResponse = await fetch('/api/payments');
         const planPayload = await planResponse.json() as { plan?: 'free' | 'pro' };
         setPlan(planPayload.plan === 'pro' ? 'pro' : 'free');
@@ -47,8 +48,8 @@ export default function AppWorkflowPage() {
           return payload.matches ?? [];
         }));
         setMatches(savedMatches.flat());
-      } catch {
-        setSignedIn(false);
+      } catch (error) {
+        console.error('Failed to load author dashboard data:', error);
       } finally {
         setLoading(false);
       }
