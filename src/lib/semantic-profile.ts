@@ -75,9 +75,15 @@ export async function judgeJournalCandidates(manuscriptText: string, candidates:
   if (!process.env.ANTHROPIC_API_KEY || candidates.length === 0) return { decisions: [], status: process.env.ANTHROPIC_API_KEY ? 'provider_error' : 'missing_key' };
   try {
     const completion = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 4000, temperature: 0,
+      // max_tokens is a ceiling, not a target - the actual latency driver is how much the model
+      // generates. The UI only ever shows the first 2 reasons and first 1 exclusion/warning per
+      // journal (page.tsx slices reasons.slice(0, 2) and warnings.slice(0, 1)), so asking the model
+      // for up to 4 of each across 20 candidates was pure wasted generation time with zero
+      // user-visible benefit. Capping the prompt's own ask to what is actually displayed, and
+      // requiring short phrases instead of open-ended sentences, cuts output tokens substantially.
+      model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', max_tokens: 2500, temperature: 0,
       system: 'You are a strict academic journal-fit judge. Judge topical scope fit, not prestige or generic field overlap. Return JSON only.',
-      messages: [{ role: 'user', content: `Judge each candidate journal for this manuscript. A journal is relevant only when its scope genuinely publishes the subject and article type. AI, statistics, or HPLC are methods and must not replace the research subject. Return exactly {"decisions":[{"name":"exact name","relevanceScore":0,"reasons":["evidence"],"exclusions":["reason"]}]}. Do not invent scope details.
+      messages: [{ role: 'user', content: `Judge each candidate journal for this manuscript. A journal is relevant only when its scope genuinely publishes the subject and article type. AI, statistics, or HPLC are methods and must not replace the research subject. Return exactly {"decisions":[{"name":"exact name","relevanceScore":0,"reasons":["short evidence phrase, max 8 words"],"exclusions":["short reason, max 8 words"]}]}. At most 2 reasons and 1 exclusion per candidate - be concise, not exhaustive. Do not invent scope details.
 
 MANUSCRIPT:
 ${manuscriptText.slice(0, 6000)}
@@ -91,7 +97,7 @@ ${JSON.stringify(candidates)}` }],
       if (!item || typeof item !== 'object') return [];
       const value = item as Partial<JournalJudgeDecision>;
       if (typeof value.name !== 'string' || typeof value.relevanceScore !== 'number') return [];
-      const strings = (items: unknown) => Array.isArray(items) ? items.filter((reason): reason is string => typeof reason === 'string').slice(0, 4) : [];
+      const strings = (items: unknown) => Array.isArray(items) ? items.filter((reason): reason is string => typeof reason === 'string').slice(0, 2) : [];
       return [{ name: value.name, relevanceScore: Math.max(0, Math.min(100, Math.round(value.relevanceScore))), reasons: strings(value.reasons), exclusions: strings(value.exclusions) }];
     }) : [];
     return decisions.length ? { decisions, status: 'active' } : { decisions: [], status: 'provider_error' };
