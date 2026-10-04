@@ -200,6 +200,43 @@ function splitManuscriptSections(text: string) {
   return sections;
 }
 
+function insertDraftIntoManuscript(text: string, anchor: string, draft: string) {
+  const insertion = draft.trim();
+  if (!insertion || text.includes(insertion)) return text;
+
+  const lines = text.split(/\r?\n/);
+  const sectionStart = lines.findIndex((line) => detectSectionName(line) === anchor);
+
+  if (anchor === 'end') {
+    return `${text.trimEnd()}\n\n${insertion}`;
+  }
+
+  if (sectionStart >= 0) {
+    const nextSection = lines.findIndex((line, index) => index > sectionStart && Boolean(detectSectionName(line)));
+    lines.splice(nextSection < 0 ? lines.length : nextSection, 0, '', insertion);
+    return lines.join('\n');
+  }
+
+  const sectionTitles: Record<string, string> = {
+    abstract: 'Abstract',
+    methods: 'Methods',
+    results: 'Results',
+    discussion: 'Discussion',
+    limitations: 'Limitations',
+    conclusion: 'Conclusion',
+    references: 'References',
+  };
+  const newSection = sectionTitles[anchor];
+  if (!newSection) {
+    return `${text.trimEnd()}\n\n${insertion}`;
+  }
+
+  const referencesStart = lines.findIndex((line) => detectSectionName(line) === 'references');
+  const insertionPoint = referencesStart < 0 ? lines.length : referencesStart;
+  lines.splice(insertionPoint, 0, ...(insertionPoint > 0 ? ['', newSection, insertion] : [newSection, insertion]));
+  return lines.join('\n');
+}
+
 function matchesQuartile(quartile: string, selectedQuartile: string) {
   if (selectedQuartile === 'Any quartile' || quartile === 'Unranked') return true;
   const rank = Number(quartile.replace('Q', ''));
@@ -763,8 +800,10 @@ ${shareUrl}` });
     setSaveMessage('');
 
     try {
-      const response = await fetch('/api/manuscripts', {
-        method: 'POST',
+      const response = await fetch(activeManuscriptId
+        ? `/api/manuscripts/${encodeURIComponent(activeManuscriptId)}`
+        : '/api/manuscripts', {
+        method: activeManuscriptId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim() || 'Untitled manuscript',
@@ -778,11 +817,58 @@ ${shareUrl}` });
         throw new Error(payload.error || 'Unable to save manuscript.');
       }
 
-      setSavedManuscripts((current) => [payload.manuscript as typeof current[number], ...current]);
+      setSavedManuscripts((current) => activeManuscriptId
+        ? current.map((manuscript) => manuscript.id === payload.manuscript?.id ? { ...manuscript, ...payload.manuscript } : manuscript)
+        : [payload.manuscript as typeof current[number], ...current]);
       setActiveManuscriptId(payload.manuscript.id);
-      setSaveMessage('Manuscript saved successfully.');
+      setSaveMessage(activeManuscriptId ? 'Manuscript changes saved.' : 'Manuscript saved successfully.');
     } catch (error) {
       setSaveMessage(error instanceof Error ? error.message : 'Unable to save manuscript.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const acceptTrackedDraft = async () => {
+    if (!trackedDraft) return;
+
+    const acceptedText = trackedDraft.text.trim();
+    const anchor = inferDraftAnchor(trackedDraft.title);
+    const updatedText = insertDraftIntoManuscript(text, anchor, acceptedText);
+    if (updatedText === text) {
+      setTrackedDraft(null);
+      setSaveMessage('This suggestion is already in the manuscript.');
+      return;
+    }
+
+    setText(updatedText);
+    setAppliedDrafts((current) => [{ title: trackedDraft.title, text: acceptedText, anchor }, ...current]);
+    setTrackedDraft(null);
+
+    if (!activeManuscriptId) {
+      setSaveMessage('Accepted change added to the manuscript editor. Save the manuscript to keep it in your account.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/manuscripts/${encodeURIComponent(activeManuscriptId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim() || 'Untitled manuscript', raw_text: updatedText }),
+      });
+      const payload = await response.json() as { manuscript?: { id: string; title: string; raw_text: string; created_at: string }; error?: string };
+      if (!response.ok || !payload.manuscript) {
+        throw new Error(payload.error || 'Unable to save the accepted change.');
+      }
+      setSavedManuscripts((current) => current.map((manuscript) => manuscript.id === payload.manuscript?.id
+        ? { ...manuscript, ...payload.manuscript }
+        : manuscript));
+      setSaveMessage('Accepted change added to the manuscript and saved to your account.');
+    } catch (error) {
+      setSaveMessage(error instanceof Error
+        ? `The change is in the editor, but could not be saved: ${error.message}`
+        : 'The change is in the editor, but could not be saved. Use Save manuscript to retry.');
     } finally {
       setSaving(false);
     }
@@ -1221,7 +1307,7 @@ ${shareUrl}` });
             <div className="row">
               <button className="btn btn-primary" onClick={() => runMatch()} disabled={matching}>{matching ? 'Matching journals...' : '🔍 Find matching journals'}</button>
               <button className="btn btn-secondary" onClick={() => { const sections = extractSectionsFromText(sample); setTitle('Amorphous solid dispersions for enhancing solubility of poorly water-soluble drugs'); setInputMode('full'); setAbstract(sections.abstract); setKeywords(sections.keywords); setText(sample); setRemoteMatches([]); setSelected(null); setAiGaps([]); setFixed([]); }}>Load a sample</button>
-              <button className="btn btn-secondary" onClick={handleSaveManuscript} disabled={saving || !text.trim()}>{saving ? 'Saving...' : 'Save manuscript'}</button>
+              <button className="btn btn-secondary" onClick={handleSaveManuscript} disabled={saving || !text.trim()}>{saving ? 'Saving...' : activeManuscriptId ? 'Save changes' : 'Save manuscript'}</button>
               <button className="btn btn-secondary" onClick={saveMatchingResults} disabled={!activeManuscriptId || matching}>{matching ? 'Saving...' : 'Save matches'}</button>
               <button className="btn btn-secondary" onClick={() => analyzeGaps()} disabled={gapLoading || !text.trim()}>{gapLoading ? 'Analyzing...' : 'AI gap analysis'}</button>
             </div>
@@ -1321,7 +1407,7 @@ ${shareUrl}` });
       </section>
 
       {showPricing && <div className="modal-backdrop" onClick={() => setShowPricing(false)}><div className="modal-card" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowPricing(false)}>✕</button><div className="modal-header"><div>🔓</div><h2>{account ? 'Unlock the full workflow' : 'Log in to continue'}</h2><p>{account ? 'Fix, Format, and Verify are where most authors save real revision time.' : 'Sign in to unlock real journal-specific fixes and author workspace features.'}</p></div>{!account && <div className="plan-card" style={{ marginBottom: 16 }}><span>Account required</span><strong>Use your SubmitCheck account</strong><p>Sign in to access journal-specific AI review, your manuscript workspace, and saved revisions.</p><div className="row" style={{ justifyContent: 'center' }}><button className="btn btn-primary" onClick={() => window.location.href = '/login'}>Log in</button><button className="btn btn-secondary" onClick={() => window.location.href = '/signup'}>Create free account</button></div></div>}<div className="plans">{selected && <div className="plan-card"><span>Just this journal</span><strong>₹99 <small>/ one-time</small></strong><p>Full AI review for {selected.name}<br />All fixes + all reviewer comments<br />No subscription</p><button className="btn btn-secondary" onClick={() => handlePayment('journal', selected.name)} disabled={paymentLoading || !account}>{paymentLoading ? 'Processing...' : account ? 'Choose' : 'Log in first'}</button></div>}<div className="plan-card"><span>Per manuscript</span><strong>₹499 <small>/ paper</small></strong><p>1 manuscript, full workflow<br />All journal matches<br />Valid until submitted</p><button className="btn btn-secondary" onClick={() => handlePayment('manuscript')} disabled={paymentLoading || !account}>{paymentLoading ? 'Processing...' : account ? 'Choose' : 'Log in first'}</button></div><div className="plan-card highlight"><b>Most popular</b><span>Author Pro</span><strong>₹299 <small>/ month</small></strong><p>Unlimited manuscripts<br />Fix + Format + Verify<br />Cancel anytime</p><button className="btn btn-primary" onClick={() => handlePayment('pro')} disabled={paymentLoading || !account}>{paymentLoading ? 'Processing...' : account ? 'Choose' : 'Log in first'}</button></div></div></div></div>}
-      {step === 2 && trackedDraft && <TrackedChangeReview draft={trackedDraft} onChange={(draftText) => setTrackedDraft({ ...trackedDraft, text: draftText })} onAccept={() => { const acceptedText = trackedDraft.text.trim(); const anchor = inferDraftAnchor(trackedDraft.title); if (acceptedText) { setAppliedDrafts((current) => [{ title: trackedDraft.title, text: acceptedText, anchor }, ...current]); } setTrackedDraft(null); setSaveMessage('Tracked change accepted into the manuscript.'); }} onReject={() => { setTrackedDraft(null); setSaveMessage('Tracked change rejected. The manuscript was not changed.'); }} />}
+      {step === 2 && trackedDraft && <TrackedChangeReview draft={trackedDraft} onChange={(draftText) => setTrackedDraft({ ...trackedDraft, text: draftText })} onAccept={() => void acceptTrackedDraft()} onReject={() => { setTrackedDraft(null); setSaveMessage('Tracked change rejected. The manuscript was not changed.'); }} />}
     </main>
   );
 }
@@ -1841,6 +1927,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onUnlockJournal
     const sectionDrafts = new Map<string, Array<{ title: string; text: string; anchor: string }>>();
 
     appliedDrafts.forEach((draft) => {
+      if (text.includes(draft.text)) return;
       const key = draft.anchor || 'end';
       const list = sectionDrafts.get(key) ?? [];
       list.push(draft);
@@ -1857,7 +1944,7 @@ function GapPanel({ gaps, plan, fixed, onFix, onApply, onUnlock, onUnlockJournal
 
     docChildren.push(
       new Paragraph({
-        text: 'Original manuscript with tracked changes',
+        text: 'Manuscript with accepted revisions',
         heading: 'Heading2',
         spacing: { before: 120, after: 120 },
       }),
