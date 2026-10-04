@@ -995,11 +995,14 @@ ${shareUrl}` });
             const verification = await fetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...payment, plan: selectedPlan, journalName }),
+              body: JSON.stringify(payment),
             });
-            const result = await verification.json() as { error?: string; verified?: boolean };
+            const result = await verification.json() as { error?: string; verified?: boolean; plan?: string };
             if (!verification.ok || !result.verified) throw new Error(result.error || 'Payment verification failed.');
-            if (selectedPlan === 'journal') {
+            // Branch on the server's own derived plan (sourced from the Razorpay order's notes),
+            // not the selectedPlan this checkout was opened with - the server is the only
+            // trustworthy source for what was actually purchased.
+            if (result.plan === 'journal') {
               setSaveMessage(`Payment verified. Unlocking the full review for ${journalName}...`);
               void analyzeGaps(selected ?? undefined);
             } else {

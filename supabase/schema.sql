@@ -217,7 +217,14 @@ create policy "owners manage matches" on public.manuscript_journal_matches for a
 );
 create policy "owners read payments" on public.payments for select using (auth.uid() = user_id);
 create policy "owners manage journal unlocks" on public.journal_unlocks for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "authenticated users read expert quote requests" on public.expert_quote_requests for select using (auth.role() = 'authenticated');
+-- No client-facing SELECT policy for expert_quote_requests: this table has no user_id/ownership
+-- column (it is a public "request a quote" form, not tied to an account), and the only app code
+-- that touches it (src/app/api/expert-quote-requests/route.ts) uses the service-role key for
+-- inserts, bypassing RLS entirely. A prior "authenticated users read expert quote requests" select
+-- policy modeled on the public journal-catalog read pattern was mistakenly applied here too,
+-- exposing every submitter's email, WhatsApp number, and request details to any other logged-in
+-- user via a direct client-side query. With RLS enabled and no select policy, all client reads are
+-- denied by default; only the service-role key (already used for inserts) can read this table.
 create policy "owners manage gap analysis cache" on public.gap_analysis_cache for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create index idx_journals_field_quartile on public.journals (field, quartile);
