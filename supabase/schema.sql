@@ -142,6 +142,18 @@ create table public.payments (
   updated_at timestamptz not null default now()
 );
 
+-- One-time, per-journal unlock (the Rs99 "unlock this journal" upsell): grants the full AI gap
+-- review for exactly one journal name without requiring a Pro subscription. Checked alongside the
+-- profiles.plan subscription in /api/gap-analysis - either one being true is sufficient.
+create table public.journal_unlocks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  journal_name text not null,
+  payment_id text,
+  created_at timestamptz not null default now(),
+  unique (user_id, journal_name)
+);
+
 create table public.expert_quote_requests (
   id uuid primary key default gen_random_uuid(),
   service_type text not null,
@@ -185,6 +197,7 @@ alter table public.journal_requirements enable row level security;
 alter table public.journal_snapshots enable row level security;
 alter table public.manuscript_journal_matches enable row level security;
 alter table public.payments enable row level security;
+alter table public.journal_unlocks enable row level security;
 alter table public.expert_quote_requests enable row level security;
 alter table public.gap_analysis_cache enable row level security;
 
@@ -203,6 +216,7 @@ create policy "owners manage matches" on public.manuscript_journal_matches for a
   exists (select 1 from public.manuscripts where id = manuscript_id and user_id = auth.uid())
 );
 create policy "owners read payments" on public.payments for select using (auth.uid() = user_id);
+create policy "owners manage journal unlocks" on public.journal_unlocks for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "authenticated users read expert quote requests" on public.expert_quote_requests for select using (auth.role() = 'authenticated');
 create policy "owners manage gap analysis cache" on public.gap_analysis_cache for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 

@@ -9,6 +9,7 @@ export async function POST(request: Request) {
       razorpay_payment_id?: unknown;
       razorpay_signature?: unknown;
       plan?: unknown;
+      journalName?: unknown;
     };
     const orderId = typeof body.razorpay_order_id === 'string' ? body.razorpay_order_id : '';
     const paymentId = typeof body.razorpay_payment_id === 'string' ? body.razorpay_payment_id : '';
@@ -25,15 +26,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Payment signature mismatch.' }, { status: 400 });
     }
 
-    const plan = body.plan === 'manuscript' ? 'manuscript' : 'pro';
+    const plan = body.plan === 'manuscript' ? 'manuscript' : body.plan === 'journal' ? 'journal' : 'pro';
+    const journalName = typeof body.journalName === 'string' ? body.journalName.trim() : '';
     try {
       const supabase = await createSupabaseServerClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('profiles').update({ plan: 'pro', plan_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }).eq('id', user.id);
+        if (plan === 'journal' && journalName) {
+          await supabase.from('journal_unlocks').upsert({ user_id: user.id, journal_name: journalName, payment_id: paymentId }, { onConflict: 'user_id,journal_name' });
+        } else {
+          await supabase.from('profiles').update({ plan: 'pro', plan_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() }).eq('id', user.id);
+        }
       }
     } catch {
-      // Signature verification remains successful even if profile persistence is unavailable.
+      // Signature verification remains successful even if profile/unlock persistence is unavailable.
     }
 
     return NextResponse.json({ verified: true, payment_id: paymentId, order_id: orderId, plan });

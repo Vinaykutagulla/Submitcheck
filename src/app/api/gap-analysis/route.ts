@@ -56,16 +56,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Please log in to use AI gap analysis.' }, { status: 401 });
   }
 
-  const { data: profile } = await supabase.from('profiles').select('plan, plan_expires_at').eq('id', user.id).single();
-  // Free accounts still get real, journal-specific AI fixes - just a capped preview of them.
-  // Paying unlocks the remaining fixes server-side (see FREE_GAP_LIMIT/FREE_SENTENCE_LIMIT below)
-  // rather than gating the whole feature, so free users never fall back to generic checklist copy.
-  const planActive = profile?.plan === 'pro' && (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date());
-
   const manuscriptText = typeof body.manuscriptText === 'string' ? body.manuscriptText : '';
   const journalName = typeof body.journalName === 'string' ? body.journalName : 'target journal';
   const journalField = typeof body.journalField === 'string' ? body.journalField : 'general research';
   const articleType = typeof body.articleType === 'string' ? body.articleType : 'research';
+
+  const [{ data: profile }, { data: journalUnlock }] = await Promise.all([
+    supabase.from('profiles').select('plan, plan_expires_at').eq('id', user.id).single(),
+    supabase.from('journal_unlocks').select('id').eq('user_id', user.id).eq('journal_name', journalName).maybeSingle(),
+  ]);
+  const subscriptionActive = profile?.plan === 'pro' && (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date());
+  // Free accounts still get real, journal-specific AI fixes - just a capped preview of them.
+  // Paying unlocks the remaining fixes server-side (see FREE_GAP_LIMIT/FREE_SENTENCE_LIMIT below)
+  // rather than gating the whole feature, so free users never fall back to generic checklist copy.
+  // A Rs99 one-time "unlock this journal" purchase (journal_unlocks) grants the same full-access
+  // treatment as an active Pro subscription, but scoped to this one journal name only.
+  const planActive = subscriptionActive || Boolean(journalUnlock);
   const journalRequirements = body.journalRequirements && typeof body.journalRequirements === 'object'
     ? JSON.stringify(body.journalRequirements)
     : '{}';

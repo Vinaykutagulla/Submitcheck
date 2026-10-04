@@ -9,7 +9,7 @@ type RazorpayWebhookPayload = {
       entity?: {
         id?: string;
         order_id?: string;
-        notes?: { plan?: string; user_id?: string };
+        notes?: { plan?: string; user_id?: string; journal_name?: string };
       };
     };
   };
@@ -36,10 +36,21 @@ export async function POST(request: Request) {
   const userId = paymentEntity?.notes?.user_id;
 
   if (payload.event === 'payment.captured' && userId) {
-    await supabaseAdmin
-      .from('profiles')
-      .update({ plan: 'pro', plan_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() })
-      .eq('id', userId);
+    // The order's notes record which plan was actually purchased (set server-side in
+    // /api/create-order, never client-controlled) - a journal unlock must not fall through to
+    // granting a full Pro subscription just because this webhook is the server-to-server fallback
+    // for the client-side verify-payment call.
+    const journalName = paymentEntity?.notes?.journal_name;
+    if (paymentEntity?.notes?.plan === 'journal' && journalName) {
+      await supabaseAdmin
+        .from('journal_unlocks')
+        .upsert({ user_id: userId, journal_name: journalName, payment_id: paymentEntity?.id }, { onConflict: 'user_id,journal_name' });
+    } else {
+      await supabaseAdmin
+        .from('profiles')
+        .update({ plan: 'pro', plan_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() })
+        .eq('id', userId);
+    }
   }
 
   // payment.failed and events without a user_id (anonymous checkout) are acknowledged
