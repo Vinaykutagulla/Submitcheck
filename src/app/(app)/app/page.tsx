@@ -14,7 +14,6 @@ export default function AppWorkflowPage() {
   const [signedIn, setSignedIn] = useState(false);
   const [plan, setPlan] = useState<'free' | 'pro'>('free');
   const [account, setAccount] = useState<Account | null>(null);
-  const [showPricing, setShowPricing] = useState(false);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -108,7 +107,7 @@ ${shareUrl}` });
             <p>Match the right journal, close editorial gaps, and package a submission-ready manuscript in one calm, guided workflow.</p>
             <div className="hero-actions">
               <Link href="/" className="btn btn-primary">Start matching</Link>
-              <button className="btn btn-secondary" onClick={() => setShowPricing(true)}>Unlock Pro</button>
+              <Link href="/?pricing=1" className="btn btn-secondary">Unlock Pro</Link>
             </div>
             <div className="hero-microcopy" aria-label="Key features">
               <span>✔ Fit scoring</span>
@@ -123,31 +122,33 @@ ${shareUrl}` });
               <span className="tiny-status"><i /> Live</span>
             </div>
 
-            <div className="hero-card">
-              <div className="hero-card-row">
-                <span>Best fit</span>
-                <strong>94%</strong>
+            {topMatches[0] ? <>
+              <div className="hero-card">
+                <div className="hero-card-row">
+                  <span>Best fit</span>
+                  <strong>{topMatches[0].fit_score}%</strong>
+                </div>
+                <div className="hero-card-row muted-row">
+                  <span>Quartile</span>
+                  <strong>{topMatches[0].journals?.quartile ?? 'Not listed'}</strong>
+                </div>
+                <div className="hero-card-row muted-row">
+                  <span>Editorial gaps</span>
+                  <strong>{String(topMatches[0].gaps?.length ?? 0).padStart(2, '0')}</strong>
+                </div>
               </div>
-              <div className="hero-card-row muted-row">
-                <span>Target range</span>
-                <strong>Q1–Q2</strong>
-              </div>
-              <div className="hero-card-row muted-row">
-                <span>Editorial gaps</span>
-                <strong>08</strong>
-              </div>
-            </div>
 
-            <div className="hero-mini-stack">
-              <div className="mini-metric">
-                <small>Journal match</small>
-                <strong>Journal of Controlled Release</strong>
+              <div className="hero-mini-stack">
+                <div className="mini-metric">
+                  <small>Journal match</small>
+                  <strong>{topMatches[0].journals?.name ?? 'Journal result'}</strong>
+                </div>
+                <div className="mini-metric alt">
+                  <small>Saved matches</small>
+                  <strong>{matches.length} journal{matches.length === 1 ? '' : 's'} tracked</strong>
+                </div>
               </div>
-              <div className="mini-metric alt">
-                <small>Submission readiness</small>
-                <strong>Ready in 3 steps</strong>
-              </div>
-            </div>
+            </> : <div className="empty-note" style={{ color: 'rgba(255,255,255,0.8)' }}>Run a manuscript through Find Journals to see your real fit score and editorial gaps here.</div>}
           </div>
         </section>
 
