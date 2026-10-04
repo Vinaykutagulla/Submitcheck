@@ -920,9 +920,22 @@ ${shareUrl}` });
         }),
       });
 
-      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; totalGaps?: number; sentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }>; totalSentenceSuggestions?: number; usesFallback?: boolean; error?: string };
+      const payload = await response.json() as { gaps?: Array<{ id: string; priority: 'critical' | 'important'; icon: '❌' | '🟡'; location?: string; evidence?: string; title: string; description: string; example: string }>; totalGaps?: number; sentenceSuggestions?: Array<{ sentence: string; suggestion: string; reason: string }>; totalSentenceSuggestions?: number; usesFallback?: boolean; error?: string; requiresLogin?: boolean };
 
-      if (!response.ok || !payload.gaps) {
+      if (!response.ok) {
+        if (payload.requiresLogin) {
+          setAiGaps([]);
+          setAiGapsTotal(0);
+          setAiGapsReady(false);
+          setAiGapsError('Please log in to unlock journal-specific AI gap analysis.');
+          setSaveMessage('Please log in to unlock journal-specific AI gap analysis.');
+          setShowPricing(true);
+          return;
+        }
+        throw new Error(payload.error || 'Unable to generate suggestions.');
+      }
+
+      if (!payload.gaps) {
         throw new Error(payload.error || 'Unable to generate suggestions.');
       }
 
@@ -1307,7 +1320,7 @@ ${shareUrl}` });
         </div>
       </section>
 
-      {showPricing && <div className="modal-backdrop" onClick={() => setShowPricing(false)}><div className="modal-card" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowPricing(false)}>✕</button><div className="modal-header"><div>🔓</div><h2>Unlock the full workflow</h2><p>Fix, Format, and Verify are where most authors save real revision time.</p></div><div className="plans">{selected && <div className="plan-card"><span>Just this journal</span><strong>₹99 <small>/ one-time</small></strong><p>Full AI review for {selected.name}<br />All fixes + all reviewer comments<br />No subscription</p><button className="btn btn-secondary" onClick={() => handlePayment('journal', selected.name)} disabled={paymentLoading}>{paymentLoading ? 'Processing...' : 'Choose'}</button></div>}<div className="plan-card"><span>Per manuscript</span><strong>₹499 <small>/ paper</small></strong><p>1 manuscript, full workflow<br />All journal matches<br />Valid until submitted</p><button className="btn btn-secondary" onClick={() => handlePayment('manuscript')} disabled={paymentLoading}>{paymentLoading ? 'Processing...' : 'Choose'}</button></div><div className="plan-card highlight"><b>Most popular</b><span>Author Pro</span><strong>₹299 <small>/ month</small></strong><p>Unlimited manuscripts<br />Fix + Format + Verify<br />Cancel anytime</p><button className="btn btn-primary" onClick={() => handlePayment('pro')} disabled={paymentLoading}>{paymentLoading ? 'Processing...' : 'Choose'}</button></div></div></div></div>}
+      {showPricing && <div className="modal-backdrop" onClick={() => setShowPricing(false)}><div className="modal-card" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowPricing(false)}>✕</button><div className="modal-header"><div>🔓</div><h2>{account ? 'Unlock the full workflow' : 'Log in to continue'}</h2><p>{account ? 'Fix, Format, and Verify are where most authors save real revision time.' : 'Sign in to unlock real journal-specific fixes and author workspace features.'}</p></div>{!account && <div className="plan-card" style={{ marginBottom: 16 }}><span>Account required</span><strong>Use your SubmitCheck account</strong><p>Sign in to access journal-specific AI review, your manuscript workspace, and saved revisions.</p><div className="row" style={{ justifyContent: 'center' }}><button className="btn btn-primary" onClick={() => window.location.href = '/login'}>Log in</button><button className="btn btn-secondary" onClick={() => window.location.href = '/signup'}>Create free account</button></div></div>}<div className="plans">{selected && <div className="plan-card"><span>Just this journal</span><strong>₹99 <small>/ one-time</small></strong><p>Full AI review for {selected.name}<br />All fixes + all reviewer comments<br />No subscription</p><button className="btn btn-secondary" onClick={() => handlePayment('journal', selected.name)} disabled={paymentLoading || !account}>{paymentLoading ? 'Processing...' : account ? 'Choose' : 'Log in first'}</button></div>}<div className="plan-card"><span>Per manuscript</span><strong>₹499 <small>/ paper</small></strong><p>1 manuscript, full workflow<br />All journal matches<br />Valid until submitted</p><button className="btn btn-secondary" onClick={() => handlePayment('manuscript')} disabled={paymentLoading || !account}>{paymentLoading ? 'Processing...' : account ? 'Choose' : 'Log in first'}</button></div><div className="plan-card highlight"><b>Most popular</b><span>Author Pro</span><strong>₹299 <small>/ month</small></strong><p>Unlimited manuscripts<br />Fix + Format + Verify<br />Cancel anytime</p><button className="btn btn-primary" onClick={() => handlePayment('pro')} disabled={paymentLoading || !account}>{paymentLoading ? 'Processing...' : account ? 'Choose' : 'Log in first'}</button></div></div></div></div>}
       {step === 2 && trackedDraft && <TrackedChangeReview draft={trackedDraft} onChange={(draftText) => setTrackedDraft({ ...trackedDraft, text: draftText })} onAccept={() => { const acceptedText = trackedDraft.text.trim(); const anchor = inferDraftAnchor(trackedDraft.title); if (acceptedText) { setAppliedDrafts((current) => [{ title: trackedDraft.title, text: acceptedText, anchor }, ...current]); } setTrackedDraft(null); setSaveMessage('Tracked change accepted into the manuscript.'); }} onReject={() => { setTrackedDraft(null); setSaveMessage('Tracked change rejected. The manuscript was not changed.'); }} />}
     </main>
   );

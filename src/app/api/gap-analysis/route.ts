@@ -53,7 +53,10 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: 'Please log in to use AI gap analysis.' }, { status: 401 });
+    return NextResponse.json({
+      error: 'Please log in to unlock journal-specific AI gap analysis.',
+      requiresLogin: true,
+    }, { status: 401 });
   }
 
   const manuscriptText = typeof body.manuscriptText === 'string' ? body.manuscriptText : '';
