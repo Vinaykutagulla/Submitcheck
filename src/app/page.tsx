@@ -371,7 +371,8 @@ function checkDeclarations(text: string) {
     { id: 'ethics', label: 'Ethics approval', pass: /ethic(?:s|al) (?:approval|committee|clearance)|institutional review board|irb approval/i.test(text) },
     { id: 'data', label: 'Data availability', pass: /(?:^|\n)\s*(?:data availability|data sharing statement)\s*:/i.test(text) },
   ];
-  return { items, pass: items.every((item) => item.pass) };
+  const requiredItems = items.filter((item) => item.id !== 'ethics');
+  return { items, pass: requiredItems.every((item) => item.pass) };
 }
 
 function checkStatisticalReporting(text: string) {
@@ -1402,7 +1403,7 @@ ${shareUrl}` });
 
         {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} onTextChange={setText} onRequirementsLoaded={setFormatRequirements} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
-        {step === 4 && (selected ? <section className="view"><VerifyPanel selected={selected} text={text} plan={plan} onUnlock={() => setShowPricing(true)} onCompleted={() => setVerifyDone(true)} onTextChange={setText} /></section> : <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="empty">🔍<br />Select a journal first to run submission-readiness checks.</div></div></section>)}
+        {step === 4 && (selected ? <section className="view"><VerifyPanel selected={selected} text={text} plan={plan} requirements={formatRequirements} onUnlock={() => setShowPricing(true)} onCompleted={() => setVerifyDone(true)} onTextChange={setText} /></section> : <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="empty">🔍<br />Select a journal first to run submission-readiness checks.</div></div></section>)}
 
         {step === 5 && <section className="view"><div className="panel"><label className="panel-label">Submission package <span className="hint">Review every field and declaration before opening the publisher portal.</span></label>{[['📄 Manuscript is complete', text.length > 200], ['🎯 Target journal selected', !!selected], ['🔧 Gaps fixed', chosenGaps.filter((gap) => gap.priority === 'critical').every((gap) => fixed.includes(gap.title))], ['📐 Formatting reviewed', formatDone], ['🔍 Integrity checks completed', verifyDone]].map(([label, done]) => <p className="check-row" key={label as string}><span>{done ? '✅' : '⬜'}</span>{label as string}</p>)}{selected ? <div className="submission-package"><SubmissionField label="Title" value={title || text.match(/^title\s*:\s*(.+)$/im)?.[1] || 'Add a manuscript title'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><SubmissionField label="Abstract" value={manuscriptAbstract || 'Abstract not detected. Add it before submission.'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><SubmissionField label="Keywords" value={manuscriptKeywords || 'Keywords not detected. Add 4-8 terms.'} copied={copiedSubmissionField} onCopy={copySubmissionField} /><label>Corresponding author<input value={authorName} onChange={(event) => setAuthorName(event.target.value)} placeholder="Full name" /></label><label>Affiliation<input value={authorAffiliation} onChange={(event) => setAuthorAffiliation(event.target.value)} placeholder="University, department, country" /></label><label>ORCID (optional)<input value={authorOrcid} onChange={(event) => setAuthorOrcid(event.target.value)} placeholder="0000-0000-0000-0000" /></label><label>Funding statement<textarea value={fundingStatement} onChange={(event) => setFundingStatement(event.target.value)} /></label><label>Competing interests<textarea value={conflictStatement} onChange={(event) => setConflictStatement(event.target.value)} /></label><label>Data availability statement<textarea value={dataStatement} onChange={(event) => setDataStatement(event.target.value)} /></label><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => setDeclarationsConfirmed(event.target.checked)} /> I confirm that author details, ethics, funding, conflicts, data availability, and manuscript content are accurate.</label></div> : <div className="submission-package-empty"><strong>Select a target journal first.</strong><span>Go to Find, choose a journal, then return here to prepare the submission package.</span></div>}<div className="submit-status">{plan === 'pro' && selected && formatDone && verifyDone && declarationsConfirmed ? 'Ready for author-controlled submission.' : 'Complete all checks and confirm declarations before submission.'}</div><button className="btn btn-success" disabled={!selected || !declarationsConfirmed} onClick={() => { if (selected) window.open(selected.submissionUrl || getAuthorInstructionsSearchUrl(selected), '_blank'); }}>📤 Open journal submission portal</button></div></section>}
       </div>
@@ -1651,62 +1652,154 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
   return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected. Add keywords.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div>{plan === 'pro' ? <span className="plan-pill pro">⭐ Pro</span> : <button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button>}</div><div className="live-instructions"><div><strong>{liveInstructions?.confirmed ? 'Live instructions checked' : liveInstructions ? 'Using catalog defaults' : 'Checking instructions...'}</strong><span>{liveInstructions ? `${liveInstructions.source} · ${new Date(liveInstructions.checkedAt).toLocaleTimeString()}` : 'Looking up publisher or DOAJ author instructions.'}</span></div><div className="live-instruction-actions"><button className="btn-small" onClick={fetchInstructions} disabled={fetchingInstructions}>{fetchingInstructions ? 'Checking...' : 'Fetch live rules'}</button>{liveInstructions?.url && <a className="btn-small" href={liveInstructions.url} target="_blank" rel="noreferrer">Open source</a>}</div></div>{liveInstructions && <div className="format-source"><strong>Detected rules:</strong> {liveRequirements?.abstract ?? selected.requirements.abstract} abstract · {abstractWordLimit} word abstract limit{liveRequirements?.wordLimit || selected.requirements.wordLimit ? ` · ${liveRequirements?.wordLimit ?? selected.requirements.wordLimit} manuscript words` : ''} · {liveRequirements?.refStyle ?? selected.requirements.refStyle} references</div>}<div className="format-summary"><div><strong>{openRules.length === 0 ? 'No detected mismatches' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><p>Auto-format creates a DOCX with consistent title, section headings, and academic typography. It preserves wording and citations; verify exact publisher citation, margin, and figure rules before submission.</p></div><button className="btn btn-primary btn-small" onClick={downloadFormattedManuscript} disabled={formattingStatus === 'downloading'}>{formattingStatus === 'downloading' ? 'Formatting…' : 'Auto-format & download DOCX'}</button></div>{formattingError && <p className="auth-error" role="alert">{formattingError}</p>}{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Needs review'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{rule.id === 'abstract-word-limit' && !done && plan === 'pro' && (condensedAbstract ? <div className="verify-suggestion"><span>AI-condensed abstract ({wordCount(condensedAbstract)} words):</span><p>{condensedAbstract}</p><div className="row"><button className="btn-apply btn-small" onClick={acceptCondensedAbstract}>Accept</button><button className="btn-small" onClick={rejectCondensedAbstract}>Reject</button></div></div> : <button className="btn btn-apply btn-small" onClick={condenseAbstractNow} disabled={condensing}>{condensing ? 'Condensing…' : `✨ AI condense to ${abstractWordLimit} words`}</button>)}{rule.id === 'abstract-word-limit' && !done && plan !== 'pro' && <button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock AI condense</button>}{rule.id === 'abstract-word-limit' && condenseError && <p className="auth-error">{condenseError}</p>}{!done && rule.id !== 'abstract-word-limit' && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
 }
 
-function VerifyPanel({ selected, text, plan, onUnlock, onCompleted, onTextChange }: { selected: Journal; text: string; plan: 'free' | 'pro'; onUnlock: () => void; onCompleted: () => void; onTextChange: (value: string) => void }) {
+function VerifyPanel({ selected, text, plan, requirements, onUnlock, onCompleted, onTextChange }: { selected: Journal; text: string; plan: 'free' | 'pro'; requirements: JournalFormattingRequirements | null; onUnlock: () => void; onCompleted: () => void; onTextChange: (value: string) => void }) {
   const [ran, setRan] = useState(false);
-  const [resolvedChecks, setResolvedChecks] = useState<string[]>([]);
+  const [reviewedChecks, setReviewedChecks] = useState<string[]>([]);
   const titlePresent = Boolean(titleFromManuscript(text));
   const abstractPresent = Boolean(text.match(/abstract\s*:?\s*[\s\S]*?(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[0]);
   const keywordsPresent = Boolean(text.match(/keywords?\s*:?\s*[^\n]+/i));
-  const methodsPresent = /(?:^|\n)\s*(?:\d+\.?\s*)?(?:methods?|materials and methods|methodology)\b/i.test(text);
-  const resultsPresent = /(?:^|\n)\s*(?:\d+\.?\s*)?(?:results?|findings?)\b/i.test(text);
-  const referencesPresent = /(?:^|\n)\s*references?\b/i.test(text);
-  const basicChecks = [
-    { id: 'title', label: 'Title is present', detail: titlePresent ? 'A manuscript title was detected.' : 'Add a title before submission.', pass: titlePresent },
-    { id: 'abstract', label: 'Abstract is present', detail: abstractPresent ? 'Abstract text detected.' : 'Add an abstract before submission.', pass: abstractPresent },
-    { id: 'keywords', label: 'Keywords are present', detail: keywordsPresent ? 'Keywords detected.' : 'Add 4–8 keywords.', pass: keywordsPresent },
-    { id: 'methods', label: 'Methods section is present', detail: methodsPresent ? 'Methods section detected.' : 'Methods section not detected.', pass: methodsPresent },
-    { id: 'results', label: 'Results section is present', detail: resultsPresent ? 'Results section detected.' : 'Results section not detected.', pass: resultsPresent },
-    { id: 'references', label: 'References are present', detail: referencesPresent ? 'Reference section detected.' : 'Reference section not detected.', pass: referencesPresent },
-  ];
-  const wordLimit = selected.requirements.wordLimit;
   const manuscriptProfile = useMemo(() => profileManuscript(text), [text]);
+  const sectionNames = useMemo(() => splitManuscriptSections(text).map((section) => section.name), [text]);
+  const methodsPresent = sectionNames.some((section) => ['methods', 'methodology', 'experimental'].includes(section));
+  const resultsPresent = sectionNames.some((section) => ['results', 'findings', 'outcomes'].includes(section));
+  const referencesPresent = /(?:^|\n)\s*references?\b/i.test(text);
+  const abstractRequirement = requirements?.abstract ?? selected.requirements.abstract;
+  const abstractWordLimit = requirements?.abstractWordLimit ?? null;
+  const wordLimit = requirements?.wordLimit ?? selected.requirements.wordLimit;
+  const referenceStyle = requirements?.refStyle ?? selected.requirements.refStyle;
+  const abstractText = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1] ?? '';
+  const abstractStructured = /\b(background|objective|aim|purpose)\s*:/i.test(abstractText)
+    && /\bmethods?\s*:/i.test(abstractText)
+    && /\bresults?\s*:/i.test(abstractText)
+    && /\bconclusion\s*:/i.test(abstractText);
+  const referenceStyleExpected = /numbered|vancouver/i.test(referenceStyle) ? 'numbered' : /apa|author.?date|harvard/i.test(referenceStyle) ? 'author-year' : 'unknown';
+  const statisticsApplicable = manuscriptProfile.articleType === 'Research' || manuscriptProfile.articleType === 'Unknown';
+  const methodsApplicable = manuscriptProfile.articleType === 'Research' || manuscriptProfile.articleType === 'Methods' || manuscriptProfile.articleType === 'Unknown';
+  const resultsApplicable = manuscriptProfile.articleType === 'Research' || manuscriptProfile.articleType === 'Unknown';
+  const basicChecks = [
+    { id: 'title', label: 'Title is present', detail: titlePresent ? 'A manuscript title was detected.' : 'Add a title before submission.', pass: titlePresent, applicable: true, required: true },
+    { id: 'abstract', label: 'Abstract is present', detail: abstractPresent ? 'Abstract text detected.' : 'Add an abstract before submission.', pass: abstractPresent, applicable: true, required: true },
+    { id: 'keywords', label: 'Keywords are present', detail: keywordsPresent ? 'Keywords detected.' : 'No keywords detected. Add them if required by the journal.', pass: keywordsPresent, applicable: true, required: false },
+    { id: 'methods', label: 'Methods section is present', detail: methodsPresent ? 'Methods section detected.' : methodsApplicable ? 'Methods section not detected.' : `Usually not required for a ${manuscriptProfile.articleType.toLowerCase()} article; confirm the journal's article-type rules.`, pass: methodsPresent, applicable: methodsApplicable, required: methodsApplicable },
+    { id: 'results', label: 'Results section is present', detail: resultsPresent ? 'Results section detected.' : resultsApplicable ? 'Results section not detected.' : `Usually not required for a ${manuscriptProfile.articleType.toLowerCase()} article; confirm the journal's article-type rules.`, pass: resultsPresent, applicable: resultsApplicable, required: resultsApplicable },
+    { id: 'references', label: 'References are present', detail: referencesPresent ? 'Reference section detected.' : 'Reference section not detected.', pass: referencesPresent, applicable: true, required: true },
+  ];
   const components = useMemo(() => checkManuscriptComponents(text, manuscriptProfile.articleType), [text, manuscriptProfile.articleType]);
   const referenceCheck = useMemo(() => checkReferenceConsistency(text), [text]);
   const declarations = useMemo(() => checkDeclarations(text), [text]);
   const statistics = useMemo(() => checkStatisticalReporting(text), [text]);
   const referenceDetailParts = [
     referenceCheck.hasReferenceList ? `${referenceCheck.totalReferences} reference${referenceCheck.totalReferences === 1 ? '' : 's'} detected` : 'No reference list detected',
+    referenceCheck.style === 'unknown' ? 'No in-text citation style detected; verify citations manually' : null,
     referenceCheck.style !== 'unknown' && referenceCheck.missingCitations.length ? `${referenceCheck.missingCitations.length} citation${referenceCheck.missingCitations.length === 1 ? '' : 's'} with no matching reference (e.g. ${referenceCheck.missingCitations.slice(0, 5).join(', ')})` : null,
     referenceCheck.style !== 'unknown' && referenceCheck.orphanedReferences.length ? `${referenceCheck.orphanedReferences.length} reference${referenceCheck.orphanedReferences.length === 1 ? '' : 's'} never cited in text` : null,
     referenceCheck.duplicateReferences.length ? `${referenceCheck.duplicateReferences.length} possible duplicate reference${referenceCheck.duplicateReferences.length === 1 ? '' : 's'}` : null,
   ].filter(Boolean).join(' · ');
   const deepChecks = [
-    { id: 'journal-requirements', label: 'Journal-specific requirements', detail: `${selected.name} · ${selected.requirements.abstract} abstract · ${selected.requirements.refStyle} references${wordLimit ? ` · ${wordCount(text)}/${wordLimit} words` : ''}`, pass: !wordLimit || wordCount(text) <= wordLimit, suggestion: null as string | null },
+    { id: 'journal-requirements', label: 'Journal-specific requirements', detail: `${selected.name} · ${abstractRequirement} abstract${abstractRequirement === 'structured' && !abstractStructured ? ' · required headings not detected' : ''}${abstractWordLimit ? ` · ${wordCount(abstractText)} / ${abstractWordLimit} abstract words` : ''} · ${referenceStyle} references${wordLimit ? ` · ${wordCount(text)}/${wordLimit} manuscript words` : ''}`, pass: (!wordLimit || wordCount(text) <= wordLimit) && (!abstractWordLimit || wordCount(abstractText) <= abstractWordLimit) && (abstractRequirement !== 'structured' || abstractStructured), suggestion: null as string | null },
     ...components.map((check) => ({ id: check.id, label: check.label, detail: check.detail, pass: check.pass, suggestion: check.suggestion })),
-    { id: 'reference-consistency', label: 'Reference consistency', detail: referenceDetailParts || 'Add a reference list to run this check.', pass: referenceCheck.hasReferenceList && referenceCheck.missingCitations.length === 0 && referenceCheck.duplicateReferences.length === 0, suggestion: null as string | null },
-    { id: 'statistical-reporting', label: 'Statistical reporting', detail: statistics.pass ? `Detected: ${statistics.items.filter((item) => item.pass).map((item) => item.label).join(', ')}.` : 'No sample size, significance value, or effect size detected — verify the Results section reports these.', pass: statistics.pass, suggestion: null as string | null },
-    { id: 'declarations', label: 'Declarations and ethics', detail: `${declarations.items.filter((item) => item.pass).map((item) => item.label).join(', ') || 'None detected'} present${declarations.items.some((item) => !item.pass) ? ` · missing: ${declarations.items.filter((item) => !item.pass).map((item) => item.label).join(', ')}` : ''}.`, pass: declarations.pass, suggestion: null as string | null },
+    { id: 'reference-consistency', label: 'Reference consistency', detail: `${referenceDetailParts || 'Add a reference list to run this check.'}${referenceStyleExpected !== 'unknown' && referenceCheck.style !== 'unknown' && referenceCheck.style !== referenceStyleExpected ? ` · detected ${referenceCheck.style} citations, journal expects ${referenceStyleExpected}` : ''}`, pass: referenceCheck.hasReferenceList && referenceCheck.style !== 'unknown' && referenceCheck.missingCitations.length === 0 && referenceCheck.duplicateReferences.length === 0 && (referenceStyleExpected === 'unknown' || referenceCheck.style === referenceStyleExpected), suggestion: null as string | null },
+    { id: 'statistical-reporting', label: 'Statistical reporting', detail: !statisticsApplicable ? `Not usually applicable to a ${manuscriptProfile.articleType.toLowerCase()} article; verify the journal's article-type requirements.` : statistics.pass ? `Detected: ${statistics.items.filter((item) => item.pass).map((item) => item.label).join(', ')}.` : 'No sample size, significance value, or effect size detected — verify the Results section reports these when relevant.', pass: !statisticsApplicable || statistics.pass, applicable: statisticsApplicable, suggestion: null as string | null },
+    { id: 'declarations', label: 'Declarations and ethics', detail: `${declarations.items.filter((item) => item.pass).map((item) => item.label).join(', ') || 'None detected'} present${declarations.items.some((item) => !item.pass && item.id !== 'ethics') ? ` · missing: ${declarations.items.filter((item) => !item.pass && item.id !== 'ethics').map((item) => item.label).join(', ')}` : ''}. Add an ethics approval or exemption statement when applicable.`, pass: declarations.pass, suggestion: null as string | null },
   ];
-  const passed = basicChecks.filter((check) => check.pass).length;
+  const requiredChecks = basicChecks.filter((check) => check.applicable && check.required);
+  const passed = requiredChecks.filter((check) => check.pass).length;
   const runChecks = () => {
-    if (plan !== 'pro') {
-      setRan(true);
-      return;
-    }
     setRan(true);
     onCompleted();
   };
   const acceptSuggestion = (id: string, suggestion: string) => {
     const lines = text.split(/\r?\n/);
+    if (text.includes(suggestion)) return;
     const title = titleFromManuscript(text).trim();
-    const titleIndex = lines.findIndex((line) => line.trim() === title);
+    const titleIndex = lines.findIndex((line) => /^title\s*:/i.test(line.trim()) || line.trim() === title);
     const insertAt = titleIndex >= 0 ? titleIndex + 1 : 0;
-    onTextChange([...lines.slice(0, insertAt), suggestion, ...lines.slice(insertAt)].join('\n'));
-    setResolvedChecks((current) => [...current, id]);
+    const insertions = id === 'article-type' && insertAt > 0 ? ['', suggestion] : [suggestion];
+    lines.splice(insertAt, 0, ...insertions);
+    onTextChange(lines.join('\n'));
   };
-  const dismissCheck = (id: string) => setResolvedChecks((current) => [...current, id]);
+  const reviewKey = (id: string) => `${id}:${text}`;
+  const markReviewed = (id: string) => {
+    const key = reviewKey(id);
+    setReviewedChecks((current) => current.includes(key) ? current.filter((checkId) => checkId !== key) : [...current, key]);
+  };
 
-  return <div className="verify-workspace"><div className="verify-manuscript"><div className="format-page"><div className="format-title">{titleFromManuscript(text) || 'Untitled manuscript'}</div><div className="format-meta">Submission-readiness preview · {selected.name}</div><div className="format-divider" /><h3>Detected manuscript sections</h3><div className="verify-section-list">{basicChecks.map((check) => <div className={check.pass ? 'verify-section pass' : 'verify-section warn'} key={check.id}><span>{check.pass ? '✓' : '!'}</span><strong>{check.label}</strong></div>)}</div><h3>Readiness note</h3><p>{passed === basicChecks.length ? 'The basic manuscript structure is present. Review journal-specific checks before submission.' : 'Some basic manuscript components need attention before submission.'}</p></div></div><aside className="verify-rail"><div className="verify-rail-head"><div><strong>Integrity and readiness</strong><span>{selected.name}</span></div><span className="verify-count">{ran ? `${passed}/${basicChecks.length} basic checks` : 'Not run'}</span></div><div className={`verify-summary ${ran && passed < basicChecks.length ? 'needs-review' : ''}`}><strong>{!ran ? 'Ready to run basic checks' : passed === basicChecks.length ? 'Basic checks passed' : 'Needs attention'}</strong><button className="btn btn-primary btn-small" onClick={runChecks}>{ran ? 'Run again' : 'Run checks'}</button></div><div className="verify-check-group"><div className="verify-group-label">Basic checks · Free</div>{basicChecks.map((check) => <div className={`verify-check-card ${check.pass ? 'pass' : 'warn'}`} key={check.id}><div><strong>{check.label}</strong><p>{check.detail}</p></div><span>{ran ? (check.pass ? 'Pass' : 'Needs review') : 'Pending'}</span></div>)}</div><div className="verify-check-group"><div className="verify-group-label">Deep review · Pro</div>{deepChecks.map((check) => { const resolved = resolvedChecks.includes(check.id); const done = check.pass || resolved; return <div className={plan === 'pro' ? `verify-check-card ${done ? 'pass' : 'warn'}` : 'verify-check-card locked'} key={check.id}><div><strong>{check.label}</strong><p>{check.detail}</p>{plan === 'pro' && !done && check.suggestion && <div className="verify-suggestion"><span>Suggested fix: “{check.suggestion}”</span><div className="row"><button className="btn-apply btn-small" onClick={() => acceptSuggestion(check.id, check.suggestion as string)}>Accept</button><button className="btn-small" onClick={() => dismissCheck(check.id)}>Reject</button></div></div>}{plan === 'pro' && !done && !check.suggestion && <button className="btn-small" onClick={() => dismissCheck(check.id)}>Mark reviewed</button>}</div><span>{plan === 'pro' ? (done ? 'Reviewed' : 'Needs review') : '🔒 Pro'}</span></div>; })}{plan === 'free' && <button className="btn btn-gold verify-upgrade" onClick={onUnlock}>Unlock deep verification</button>}</div></aside></div>;
+  return (
+    <div className="verify-workspace">
+      <div className="verify-manuscript">
+        <div className="format-page">
+          <div className="format-title">{titleFromManuscript(text) || 'Untitled manuscript'}</div>
+          <div className="format-meta">Submission-readiness preview · {selected.name} · {manuscriptProfile.articleType} article</div>
+          <div className="format-divider" />
+          <h3>Detected manuscript sections</h3>
+          <div className="verify-section-list">
+            {basicChecks.map((check) => {
+              const status = !check.applicable ? 'Not applicable' : check.pass ? 'Present' : check.required ? 'Missing' : 'Recommended';
+              const statusClass = !check.applicable || !check.required ? 'info' : check.pass ? 'pass' : 'warn';
+              return <div className={`verify-section ${statusClass}`} key={check.id}>
+                <span>{!check.applicable ? '—' : check.pass ? '✓' : check.required ? '!' : '·'}</span>
+                <strong>{check.label}: {status}</strong>
+              </div>;
+            })}
+          </div>
+          <h3>Readiness note</h3>
+          <p>{passed === requiredChecks.length
+            ? 'Required basic components are present. Review the journal-specific checks before submission.'
+            : 'Required manuscript components need attention before submission.'}</p>
+        </div>
+      </div>
+      <aside className="verify-rail">
+        <div className="verify-rail-head">
+          <div><strong>Integrity and readiness</strong><span>{selected.name}</span></div>
+          <span className="verify-count">{ran ? `${passed}/${requiredChecks.length} required checks passed` : 'Not run'}</span>
+        </div>
+        <div className={`verify-summary ${ran && passed < requiredChecks.length ? 'needs-review' : ''}`}>
+          <strong>{!ran
+            ? 'Run checks against your manuscript'
+            : passed === requiredChecks.length
+              ? 'Required basic checks passed'
+              : `${requiredChecks.length - passed} required checks need attention`}</strong>
+          <button className="btn btn-primary btn-small" onClick={runChecks}>{ran ? 'Run again' : 'Run checks'}</button>
+        </div>
+        <div className="verify-check-group">
+          <div className="verify-group-label">Basic checks · Free</div>
+          {basicChecks.map((check) => {
+            const status = !check.applicable ? 'Not applicable' : check.pass ? 'Pass' : check.required ? 'Needs review' : 'Recommended';
+            const statusClass = !check.applicable || !check.required ? 'info' : check.pass ? 'pass' : 'warn';
+            return <div className={`verify-check-card ${statusClass}`} key={check.id}>
+              <div><strong>{check.label}</strong><p>{check.detail}</p></div>
+              <span>{ran ? status : 'Pending'}</span>
+            </div>;
+          })}
+        </div>
+        <div className="verify-check-group">
+          <div className="verify-group-label">Deep review · Pro</div>
+          {plan === 'pro' && <p className="verify-review-note">Manual review acknowledges a finding; it does not make the automated check pass.</p>}
+          {deepChecks.map((check) => {
+            const acknowledged = reviewedChecks.includes(reviewKey(check.id));
+            const applicable = check.applicable !== false;
+            const status = !applicable ? 'Not applicable' : check.pass ? 'Pass' : acknowledged ? 'Reviewed · still flagged' : 'Needs review';
+            const statusClass = !applicable ? 'info' : check.pass ? 'pass' : acknowledged ? 'reviewed' : 'warn';
+            return <div className={plan === 'pro' ? `verify-check-card ${statusClass}` : 'verify-check-card locked'} key={check.id}>
+              <div>
+                <strong>{check.label}</strong>
+                <p>{check.detail}</p>
+                {plan === 'pro' && applicable && !check.pass && check.suggestion && <div className="verify-suggestion">
+                  <span>Suggested metadata to add: “{check.suggestion}”</span>
+                  <button className="btn-apply btn-small" onClick={() => acceptSuggestion(check.id, check.suggestion as string)}>Add to manuscript</button>
+                </div>}
+                {plan === 'pro' && applicable && !check.pass && <button className="btn-small" onClick={() => markReviewed(check.id)}>
+                  {acknowledged ? 'Undo manual review' : 'Mark manually reviewed'}
+                </button>}
+              </div>
+              <span>{plan === 'pro' ? status : '🔒 Pro'}</span>
+            </div>;
+          })}
+          {plan === 'free' && <button className="btn btn-gold verify-upgrade" onClick={onUnlock}>Unlock deep verification</button>}
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 function SubmissionAuthorForm({ authorName, onAuthorName, authorAffiliation, onAuthorAffiliation, authorOrcid, onAuthorOrcid, fundingStatement, onFundingStatement, conflictStatement, onConflictStatement, dataStatement, onDataStatement, declarationsConfirmed, onDeclarationsConfirmed }: { authorName: string; onAuthorName: (value: string) => void; authorAffiliation: string; onAuthorAffiliation: (value: string) => void; authorOrcid: string; onAuthorOrcid: (value: string) => void; fundingStatement: string; onFundingStatement: (value: string) => void; conflictStatement: string; onConflictStatement: (value: string) => void; dataStatement: string; onDataStatement: (value: string) => void; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void }) {
