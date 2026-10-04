@@ -154,6 +154,59 @@ create table public.journal_unlocks (
   unique (user_id, journal_name)
 );
 
+-- Server-side, cross-instance-safe rate limiting (a plain in-memory counter would not work
+-- correctly across the multiple serverless function instances a single endpoint can run on).
+-- rate_key is caller-defined, e.g. "journal-match:<ip>", so one table serves any number of
+-- independently-limited endpoints/buckets.
+create table public.api_rate_limits (
+  rate_key text primary key,
+  window_start timestamptz not null default now(),
+  request_count integer not null default 0
+);
+
+-- Atomically increments (or resets, if the window has expired) the counter for rate_key in a
+-- single statement, avoiding the read-then-write race a two-query check-and-increment would have
+-- under concurrent requests from the same caller. Only ever called via the service-role client
+-- (see src/lib/rate-limit.ts), never exposed to anon/authenticated API callers - see the
+-- revoke/grant below.
+create or replace function public.increment_rate_limit(p_key text, p_window_seconds integer, p_limit integer)
+returns table(allowed boolean, retry_after_seconds integer)
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_window_start timestamptz;
+  v_count integer;
+  v_now timestamptz := now();
+  v_window interval := (p_window_seconds::text || ' seconds')::interval;
+begin
+  insert into public.api_rate_limits (rate_key, window_start, request_count)
+  values (p_key, v_now, 1)
+  on conflict (rate_key) do update
+    set window_start = case
+          when public.api_rate_limits.window_start < v_now - v_window
+          then v_now
+          else public.api_rate_limits.window_start
+        end,
+        request_count = case
+          when public.api_rate_limits.window_start < v_now - v_window
+          then 1
+          else public.api_rate_limits.request_count + 1
+        end
+  returning public.api_rate_limits.window_start, public.api_rate_limits.request_count
+  into v_window_start, v_count;
+
+  if v_count > p_limit then
+    return query select false, greatest(0, p_window_seconds - extract(epoch from (v_now - v_window_start))::integer);
+  else
+    return query select true, 0;
+  end if;
+end;
+$$;
+
+revoke all on function public.increment_rate_limit(text, integer, integer) from public, anon, authenticated;
+grant execute on function public.increment_rate_limit(text, integer, integer) to service_role;
+
 create table public.expert_quote_requests (
   id uuid primary key default gen_random_uuid(),
   service_type text not null,
@@ -200,6 +253,9 @@ alter table public.payments enable row level security;
 alter table public.journal_unlocks enable row level security;
 alter table public.expert_quote_requests enable row level security;
 alter table public.gap_analysis_cache enable row level security;
+-- No client-facing policies: rate limiting is only ever read/written via the service-role client
+-- (src/lib/rate-limit.ts), never by the browser directly.
+alter table public.api_rate_limits enable row level security;
 
 create policy "owners read profiles" on public.profiles for select using (auth.uid() = id);
 create policy "owners update profiles" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);

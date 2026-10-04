@@ -4,6 +4,7 @@ import { bandForScore, confidenceForMatch, filterJournals, profileManuscript, ra
 import { lookupLiveApc } from '@/lib/journal-apc';
 import { parseApcInr } from '@/lib/apc';
 import { createSemanticProfile, judgeJournalCandidates } from '@/lib/semantic-profile';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const maxDuration = 60;
 
@@ -154,6 +155,20 @@ function isAnySelection(value: unknown): boolean {
 
 export async function POST(request: Request) {
   try {
+    // This endpoint intentionally works without login (the free-tier Find Journals funnel), but
+    // every call still triggers paid Anthropic calls (semantic profiling + AI judging) plus a
+    // large catalog query - without this, an anonymous scripted caller could run up unbounded AI
+    // cost with zero friction. A generous per-IP ceiling preserves normal use (a real author
+    // trying several filter combinations) while stopping that.
+    const clientIp = getClientIp(request);
+    const rateLimit = await checkRateLimit(`journal-match:${clientIp}`, 20, 600);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many match requests from this connection. Please wait a bit and try again.' },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } },
+      );
+    }
+
     let body: { manuscriptText?: unknown; field?: unknown; indexing?: unknown; quartile?: unknown; budget?: unknown; access?: unknown };
     try {
       body = await request.json() as { manuscriptText?: unknown; field?: unknown; indexing?: unknown; quartile?: unknown; budget?: unknown; access?: unknown };
