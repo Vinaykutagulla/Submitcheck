@@ -33,6 +33,16 @@ type Journal = {
   requirements: { abstract: 'structured' | 'unstructured'; wordLimit: number | null; refStyle: string };
 };
 
+type JournalFormattingRequirements = {
+  abstract: 'structured' | 'unstructured';
+  wordLimit: number | null;
+  abstractWordLimit: number | null;
+  refStyle: string;
+  figuresTables: boolean | null;
+  supplementaryFiles: boolean | null;
+  declarations: boolean | null;
+};
+
 const localProPreview = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_LOCAL_PRO_PREVIEW === 'true';
 
 const sample = `Title: Amorphous solid dispersions for enhancing solubility of poorly water-soluble drugs
@@ -522,6 +532,7 @@ export default function Home() {
   const [selected, setSelected] = useState<Journal | null>(null);
   const [fixed, setFixed] = useState<string[]>([]);
   const [formatDone, setFormatDone] = useState(false);
+  const [formatRequirements, setFormatRequirements] = useState<JournalFormattingRequirements | null>(null);
   const [verifyDone, setVerifyDone] = useState(false);
   const [authorName, setAuthorName] = useState('');
   const [authorAffiliation, setAuthorAffiliation] = useState('');
@@ -1167,6 +1178,7 @@ ${shareUrl}` });
     setSelected(journal);
     setFixed([]);
     setFormatDone(false);
+    setFormatRequirements(null);
     setVerifyDone(false);
     setAiGaps([]);
     setAiGapsTotal(0);
@@ -1209,7 +1221,7 @@ ${shareUrl}` });
 
   return (
     <main className="jmatch-shell">
-      {step === 5 && selected && <section className="view submit-view-new"><SubmissionPanel selected={selected} text={text} title={title} formatDone={formatDone} verifyDone={verifyDone} fixed={fixed} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} authorName={authorName} authorAffiliation={authorAffiliation} authorOrcid={authorOrcid} fundingStatement={fundingStatement} conflictStatement={conflictStatement} dataStatement={dataStatement} plan={plan} onUnlock={() => setShowPricing(true)} /><SubmissionAuthorForm authorName={authorName} onAuthorName={setAuthorName} authorAffiliation={authorAffiliation} onAuthorAffiliation={setAuthorAffiliation} authorOrcid={authorOrcid} onAuthorOrcid={setAuthorOrcid} fundingStatement={fundingStatement} onFundingStatement={setFundingStatement} conflictStatement={conflictStatement} onConflictStatement={setConflictStatement} dataStatement={dataStatement} onDataStatement={setDataStatement} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} /></section>}
+      {step === 5 && selected && <section className="view submit-view-new"><SubmissionPanel selected={selected} text={text} title={title} formatRequirements={formatRequirements} formatDone={formatDone} verifyDone={verifyDone} fixed={fixed} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} authorName={authorName} authorAffiliation={authorAffiliation} authorOrcid={authorOrcid} fundingStatement={fundingStatement} conflictStatement={conflictStatement} dataStatement={dataStatement} plan={plan} onUnlock={() => setShowPricing(true)} /><SubmissionAuthorForm authorName={authorName} onAuthorName={setAuthorName} authorAffiliation={authorAffiliation} onAuthorAffiliation={setAuthorAffiliation} authorOrcid={authorOrcid} onAuthorOrcid={setAuthorOrcid} fundingStatement={fundingStatement} onFundingStatement={setFundingStatement} conflictStatement={conflictStatement} onConflictStatement={setConflictStatement} dataStatement={dataStatement} onDataStatement={setDataStatement} declarationsConfirmed={declarationsConfirmed} onDeclarationsConfirmed={setDeclarationsConfirmed} /></section>}
       <header className="letterhead">
         <div className="letterhead-inner">
           <div>
@@ -1381,7 +1393,7 @@ ${shareUrl}` });
 
         {step === 2 && <section className="view"><div className="panel"><label className="panel-label">Fix for your journal <span className="hint">Review the editorial checks, edit the manuscript, then apply only changes you approve.</span></label><select className="wide-select" value={selected?.name ?? ''} onChange={(event) => { const journal = matches.find(({ journal: item }) => item.name === event.target.value)?.journal; if (journal) selectJournal(journal, 2); }}><option value="">Select a journal from your matches...</option>{matches.map(({ journal }) => <option key={journal.name}>{journal.name}</option>)}</select></div>{!selected ? <div className="empty">🔧<br />Select a journal and review its gaps.</div> : <GapPanel gaps={fixGaps} plan={plan} fixed={fixed} onFix={(title) => setFixed([...fixed, title])} onApply={applyGapDraft} onUnlock={() => setShowPricing(true)} onUnlockJournal={() => selected && void handlePayment('journal', selected.name)} onFormat={() => setStep(3)} text={text} onTextChange={setText} title={title} appliedDrafts={appliedDrafts} visualHtml={manuscriptVisualHtml} embeddedMedia={embeddedMedia} aiSentenceSuggestions={aiSentenceSuggestions} gapLoading={gapLoading} usingAi={aiGapsReady} aiGapsError={aiGapsError} aiGapsIsFallback={aiGapsIsFallback} onRetryAnalysis={() => void analyzeGaps(selected ?? undefined)} totalGapsCount={aiGapsTotal} totalSentenceSuggestionsCount={aiSentenceSuggestionsTotal} paymentLoading={paymentLoading} onEditorReady={setEditorPortalTarget} />}</section>}
 
-        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} onTextChange={setText} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
+        {step === 3 && (selected ? <section className="view"><FormatPanel selected={selected} text={text} visualHtml={manuscriptVisualHtml} plan={plan} onUnlock={() => setShowPricing(true)} onReviewed={() => setFormatDone(true)} onTextChange={setText} onRequirementsLoaded={setFormatRequirements} /></section> : <section className="view"><div className="panel"><label className="panel-label">Format to journal style</label><div className="selected-journal">Select a journal in Find first.</div></div><div className="empty">📐<br />Select a journal to review its author instructions and formatting rules.</div></section>)}
 
         {step === 4 && (selected ? <section className="view"><VerifyPanel selected={selected} text={text} plan={plan} onUnlock={() => setShowPricing(true)} onCompleted={() => setVerifyDone(true)} onTextChange={setText} /></section> : <section className="view"><div className="panel"><label className="panel-label">Verify — integrity and readiness</label><div className="empty">🔍<br />Select a journal first to run submission-readiness checks.</div></div></section>)}
 
@@ -1437,17 +1449,26 @@ function TrackedChangeReview({ draft, onChange, onAccept, onReject }: { draft: {
   return <section className="tracked-change-panel panel" aria-label="Tracked manuscript change"><div className="tracked-change-head"><strong>Proposed insertion: {draft.title}</strong><span>Review the wording and verify any scientific claims before accepting.</span></div><textarea className="tracked-change-editor" value={draft.text} onChange={(event) => onChange(event.target.value)} /><div className="row"><button className="btn btn-primary" onClick={onAccept}>✓ Insert into manuscript</button><button className="btn btn-secondary" onClick={onReject}>Reject</button></div></section>;
 }
 
-function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, onTextChange }: { selected: Journal; text: string; visualHtml: string; plan: 'free' | 'pro'; onUnlock: () => void; onReviewed: () => void; onTextChange: (value: string) => void }) {
+function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, onTextChange, onRequirementsLoaded }: { selected: Journal; text: string; visualHtml: string; plan: 'free' | 'pro'; onUnlock: () => void; onReviewed: () => void; onTextChange: (value: string) => void; onRequirementsLoaded: (requirements: JournalFormattingRequirements) => void }) {
   const [fixedRules, setFixedRules] = useState<string[]>([]);
-  const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string; requirements?: { abstract: 'structured' | 'unstructured'; wordLimit: number | null; abstractWordLimit: number | null; refStyle: string; figuresTables: boolean | null; supplementaryFiles: boolean | null; declarations: boolean | null } } | null>(null);
+  const [liveInstructions, setLiveInstructions] = useState<{ url: string | null; source: string; checkedAt: string; confirmed: boolean; requirements: JournalFormattingRequirements } | null>(null);
   const [fetchingInstructions, setFetchingInstructions] = useState(false);
+  const [formattingStatus, setFormattingStatus] = useState<'idle' | 'downloading' | 'error'>('idle');
+  const [formattingError, setFormattingError] = useState('');
   const [condensedAbstract, setCondensedAbstract] = useState<string | null>(null);
   const [condensing, setCondensing] = useState(false);
   const [condenseError, setCondenseError] = useState<string | null>(null);
   const titleMatch = titleFromManuscript(text) || 'Untitled manuscript';
   const abstract = text.match(/abstract\s*:?\s*([\s\S]*?)(?=\n\s*(?:keywords?|introduction|methods?)\s*:|$)/i)?.[1]?.trim() ?? '';
+  const hasStructuredAbstract = /\b(background|objective|aim)\s*:/i.test(abstract)
+    && /\bmethods?\s*:/i.test(abstract)
+    && /\bresults?\s*:/i.test(abstract)
+    && /\bconclusion\s*:/i.test(abstract);
   const references = text.match(/references\s*:?[\s\S]*$/i)?.[0] ?? '';
-  const hasSections = ['introduction', 'methods', 'results', 'discussion'].every((section) => new RegExp(`(?:^|\\n)\\s*(?:\\d+\\.?\\s*)?${section}\\b`, 'i').test(text));
+  const sectionNames = splitManuscriptSections(text).map((section) => section.name);
+  const coreSectionPositions = ['introduction', 'methods', 'results', 'discussion'].map((section) => sectionNames.indexOf(section));
+  const hasSections = coreSectionPositions.every((position) => position >= 0)
+    && coreSectionPositions.every((position, index) => index === 0 || position > coreSectionPositions[index - 1]);
   const liveRequirements = liveInstructions?.requirements;
   const abstractRequirement = liveRequirements?.abstract ?? selected.requirements.abstract;
   const wordLimit = liveRequirements?.wordLimit ?? selected.requirements.wordLimit;
@@ -1457,9 +1478,9 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
   const abstractOverLimit = Boolean(abstract) && abstractWords > abstractWordLimit;
   const rules = [
     { id: 'title', name: 'Title and front matter', source: 'A clear title should appear before the abstract.', detail: titleMatch === 'Untitled manuscript' ? 'No manuscript title was detected.' : 'Title detected and ready for journal formatting.', fixed: titleMatch !== 'Untitled manuscript' },
-    { id: 'abstract', name: 'Abstract structure', source: abstractRequirement === 'structured' ? 'Use Background, Methods, Results, and Conclusion headings.' : 'Provide a concise unstructured abstract before keywords.', detail: abstract ? `${wordCount(abstract)} words detected.` : 'Abstract not detected.', fixed: Boolean(abstract) },
+    { id: 'abstract', name: 'Abstract structure', source: abstractRequirement === 'structured' ? 'Use Background, Methods, Results, and Conclusion headings.' : 'Provide a concise unstructured abstract before keywords.', detail: abstract ? `${wordCount(abstract)} words detected${abstractRequirement === 'structured' && !hasStructuredAbstract ? ' · required labels are missing' : ''}.` : 'Abstract not detected.', fixed: Boolean(abstract) && (abstractRequirement !== 'structured' || hasStructuredAbstract) },
     { id: 'abstract-word-limit', name: 'Abstract length', source: `Abstract should be ${abstractWordLimit} words or fewer${liveRequirements?.abstractWordLimit ? '' : ' (typical limit — fetch live rules to confirm the exact figure)'}.`, detail: abstract ? `${abstractWords} / ${abstractWordLimit} words.` : 'Abstract not detected.', fixed: !abstractOverLimit },
-    { id: 'references', name: 'Reference style', source: `References should follow ${referenceStyle} style.`, detail: references ? 'Reference section detected; verify each entry before submission.' : 'Reference section not detected.', fixed: Boolean(references) },
+    { id: 'references', name: 'Reference style', source: `References should follow ${referenceStyle} style.`, detail: references ? 'Reference list found. Citation and bibliography style are preserved unchanged; verify them against the journal rules.' : 'Reference section not detected.', fixed: false },
     { id: 'sections', name: 'Section order', source: 'Title, Abstract, Keywords, Introduction, Methods, Results, Discussion, References.', detail: hasSections ? 'Core manuscript sections detected.' : 'One or more core sections are missing.', fixed: hasSections },
     { id: 'word-limit', name: 'Word limit', source: wordLimit ? `Stay within ${wordLimit} words.` : 'No verified word limit was found in the available instructions.', detail: wordLimit ? `${wordCount(text)} / ${wordLimit} words.` : 'Confirm the limit in the journal instructions.', fixed: wordLimit === null || wordCount(text) <= wordLimit },
     ...(liveRequirements?.figuresTables ? [{ id: 'figures-tables', name: 'Figures and tables', source: 'Upload figures and tables as separate files if requested.', detail: 'The live instructions mention separate figure/table files.', fixed: false }] : []),
@@ -1470,9 +1491,38 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
     setFixedRules((current) => current.includes(id) ? current : [...current, id]);
     if (rules.every((rule) => rule.fixed || rule.id === id || fixedRules.includes(rule.id))) onReviewed();
   };
-  const fixAll = () => {
-    setFixedRules(rules.map((rule) => rule.id));
-    onReviewed();
+  const downloadFormattedManuscript = async () => {
+    setFormattingStatus('downloading');
+    setFormattingError('');
+    try {
+      const manuscriptDoc = buildManuscriptDocument(
+        titleMatch,
+        text,
+        liveRequirements ?? {
+          abstract: selected.requirements.abstract,
+          wordLimit: selected.requirements.wordLimit,
+          abstractWordLimit: null,
+          refStyle: selected.requirements.refStyle,
+          figuresTables: null,
+          supplementaryFiles: null,
+          declarations: null,
+        },
+      );
+      const blob = await Packer.toBlob(manuscriptDoc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${titleMatch.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'manuscript'}-${selected.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'journal'}-formatted.docx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      onReviewed();
+      setFormattingStatus('idle');
+    } catch (error) {
+      setFormattingStatus('error');
+      setFormattingError(error instanceof Error ? error.message : 'Unable to create the formatted manuscript.');
+    }
   };
   const condenseAbstractNow = async () => {
     setCondensing(true);
@@ -1511,18 +1561,22 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
     try {
       const fetchByIssn = async (value: string) => {
         const response = await fetch(`/api/journal-details?issn=${encodeURIComponent(value)}&title=${encodeURIComponent(selected.name)}`);
-        return response.json() as Promise<{ authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string; instructionSignals?: typeof liveInstructions extends infer T ? T extends { requirements?: infer R } ? R : never : never }>;
+        if (!response.ok) throw new Error('Journal instructions lookup failed.');
+        return response.json() as Promise<{ authorInstructionsUrl?: string | null; journalUrl?: string | null; source?: string; instructionSignals?: JournalFormattingRequirements | null }>;
       };
 
       if (issn) {
         const payload = await fetchByIssn(issn);
         const requirements = payload.instructionSignals ?? fallbackProfile;
-        setLiveInstructions({
+        const instructionState = {
           url: payload.authorInstructionsUrl || payload.journalUrl || selected.authorInstructionsUrl || selected.submissionUrl || null,
-          source: payload.source || 'Live journal lookup',
+          source: payload.instructionSignals ? `${payload.source || 'Journal publisher'} author instructions` : 'Live instructions unavailable · using catalog defaults',
           checkedAt: new Date().toISOString(),
+          confirmed: Boolean(payload.instructionSignals),
           requirements,
-        });
+        };
+        setLiveInstructions(instructionState);
+        onRequirementsLoaded(requirements);
         setFetchingInstructions(false);
         return;
       }
@@ -1536,30 +1590,41 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
       if (resolvedIssn) {
         const payload = await fetchByIssn(resolvedIssn);
         const requirements = payload.instructionSignals ?? fallbackProfile;
-        setLiveInstructions({
+        const instructionState = {
           url: payload.authorInstructionsUrl || payload.journalUrl || fallbackUrl,
-          source: payload.source || 'Live journal lookup',
+          source: payload.instructionSignals ? `${payload.source || 'Journal publisher'} author instructions` : 'Live instructions unavailable · using catalog defaults',
           checkedAt: new Date().toISOString(),
+          confirmed: Boolean(payload.instructionSignals),
           requirements,
-        });
+        };
+        setLiveInstructions(instructionState);
+        onRequirementsLoaded(requirements);
         setFetchingInstructions(false);
         return;
       }
 
-      setLiveInstructions({
+      const requirements = fallbackProfile;
+      const instructionState = {
         url: fallbackUrl,
-        source: fallbackUrl ? 'Journal catalog record' : 'No live journal instructions found',
+        source: 'Live instructions unavailable · using catalog defaults',
         checkedAt: new Date().toISOString(),
-        requirements: fallbackProfile,
-      });
+        confirmed: false,
+        requirements,
+      };
+      setLiveInstructions(instructionState);
+      onRequirementsLoaded(requirements);
     } catch {
       const fallbackUrl = selected.authorInstructionsUrl || selected.submissionUrl || null;
-      setLiveInstructions({
+      const requirements = fallbackProfile;
+      const instructionState = {
         url: fallbackUrl,
-        source: fallbackUrl ? 'Catalog record' : 'No live journal instructions found',
+        source: 'Live instructions unavailable · using catalog defaults',
         checkedAt: new Date().toISOString(),
-        requirements: fallbackProfile,
-      });
+        confirmed: false,
+        requirements,
+      };
+      setLiveInstructions(instructionState);
+      onRequirementsLoaded(requirements);
     } finally {
       setFetchingInstructions(false);
     }
@@ -1576,7 +1641,7 @@ function FormatPanel({ selected, text, visualHtml, plan, onUnlock, onReviewed, o
     preview.innerHTML = visualHtml;
   }, [visualHtml]);
 
-  return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div>{plan === 'pro' ? <span className="plan-pill pro">⭐ Pro</span> : <button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button>}</div><div className="live-instructions"><div><strong>{liveInstructions ? 'Live source checked' : 'Live instructions not checked'}</strong><span>{liveInstructions ? `${liveInstructions.source} · ${new Date(liveInstructions.checkedAt).toLocaleTimeString()}` : 'Fetch the publisher or DOAJ author instructions before submission.'}</span></div><div className="live-instruction-actions"><button className="btn-small" onClick={fetchInstructions} disabled={fetchingInstructions}>{fetchingInstructions ? 'Checking...' : 'Fetch live rules'}</button>{liveInstructions?.url && <a className="btn-small" href={liveInstructions.url} target="_blank" rel="noreferrer">Open source</a>}</div></div><div className="format-summary"><strong>{openRules.length === 0 ? 'All rules reviewed' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><button className="btn btn-primary btn-small" onClick={fixAll} disabled={openRules.length === 0}>Fix all</button></div>{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Mismatch'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{rule.id === 'abstract-word-limit' && !done && plan === 'pro' && (condensedAbstract ? <div className="verify-suggestion"><span>AI-condensed abstract ({wordCount(condensedAbstract)} words):</span><p>{condensedAbstract}</p><div className="row"><button className="btn-apply btn-small" onClick={acceptCondensedAbstract}>Accept</button><button className="btn-small" onClick={rejectCondensedAbstract}>Reject</button></div></div> : <button className="btn btn-apply btn-small" onClick={condenseAbstractNow} disabled={condensing}>{condensing ? 'Condensing…' : `✨ AI condense to ${abstractWordLimit} words`}</button>)}{rule.id === 'abstract-word-limit' && !done && plan !== 'pro' && <button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock AI condense</button>}{rule.id === 'abstract-word-limit' && condenseError && <p className="auth-error">{condenseError}</p>}{!done && rule.id !== 'abstract-word-limit' && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
+  return <div className="format-workspace"><div className="format-manuscript"><div className="format-page"><div className="format-title">{titleMatch}</div><div className="format-meta">Manuscript format preview · {selected.name}</div><div className="format-divider" /><h3>Abstract</h3><p>{abstract || 'Abstract not detected. Add an abstract before submission.'}</p><h3>Keywords</h3><p>{text.match(/keywords?\s*:?\s*([^\n]+)/i)?.[1] || 'Keywords not detected. Add keywords.'}</p><div className="format-section-grid"><span>Introduction</span><span>Methods</span><span>Results</span><span>Discussion</span></div><h3>References</h3><p className="format-reference-preview">{references ? references.replace(/^references\s*:?/i, '').trim() : 'References not detected. Add and format the reference list.'}</p></div></div><aside className="format-rail"><div className="format-rail-head"><div><strong>Instructions to authors</strong><span>{selected.name}</span></div>{plan === 'pro' ? <span className="plan-pill pro">⭐ Pro</span> : <button className="btn btn-gold btn-small" onClick={onUnlock}>Pro formatting</button>}</div><div className="live-instructions"><div><strong>{liveInstructions?.confirmed ? 'Live instructions checked' : liveInstructions ? 'Using catalog defaults' : 'Checking instructions...'}</strong><span>{liveInstructions ? `${liveInstructions.source} · ${new Date(liveInstructions.checkedAt).toLocaleTimeString()}` : 'Looking up publisher or DOAJ author instructions.'}</span></div><div className="live-instruction-actions"><button className="btn-small" onClick={fetchInstructions} disabled={fetchingInstructions}>{fetchingInstructions ? 'Checking...' : 'Fetch live rules'}</button>{liveInstructions?.url && <a className="btn-small" href={liveInstructions.url} target="_blank" rel="noreferrer">Open source</a>}</div></div>{liveInstructions && <div className="format-source"><strong>Detected rules:</strong> {liveRequirements?.abstract ?? selected.requirements.abstract} abstract · {abstractWordLimit} word abstract limit{liveRequirements?.wordLimit || selected.requirements.wordLimit ? ` · ${liveRequirements?.wordLimit ?? selected.requirements.wordLimit} manuscript words` : ''} · {liveRequirements?.refStyle ?? selected.requirements.refStyle} references</div>}<div className="format-summary"><div><strong>{openRules.length === 0 ? 'No detected mismatches' : `${openRules.length} rule${openRules.length === 1 ? '' : 's'} need review`}</strong><p>Auto-format creates a DOCX with consistent title, section headings, and academic typography. It preserves wording and citations; verify exact publisher citation, margin, and figure rules before submission.</p></div><button className="btn btn-primary btn-small" onClick={downloadFormattedManuscript} disabled={formattingStatus === 'downloading'}>{formattingStatus === 'downloading' ? 'Formatting…' : 'Auto-format & download DOCX'}</button></div>{formattingError && <p className="auth-error" role="alert">{formattingError}</p>}{rules.map((rule) => { const done = rule.fixed || fixedRules.includes(rule.id); return <div className={`format-rule-card ${done ? 'fixed' : 'mismatch'}`} key={rule.id}><div className="format-rule-head"><strong>{rule.name}</strong><span className={`format-status ${done ? 'ok' : 'bad'}`}>{done ? 'Matches' : 'Needs review'}</span></div><div className="format-source">“{rule.source}”</div><p>{rule.detail}</p>{rule.id === 'abstract-word-limit' && !done && plan === 'pro' && (condensedAbstract ? <div className="verify-suggestion"><span>AI-condensed abstract ({wordCount(condensedAbstract)} words):</span><p>{condensedAbstract}</p><div className="row"><button className="btn-apply btn-small" onClick={acceptCondensedAbstract}>Accept</button><button className="btn-small" onClick={rejectCondensedAbstract}>Reject</button></div></div> : <button className="btn btn-apply btn-small" onClick={condenseAbstractNow} disabled={condensing}>{condensing ? 'Condensing…' : `✨ AI condense to ${abstractWordLimit} words`}</button>)}{rule.id === 'abstract-word-limit' && !done && plan !== 'pro' && <button className="btn btn-gold btn-small" onClick={onUnlock}>⭐ Unlock AI condense</button>}{rule.id === 'abstract-word-limit' && condenseError && <p className="auth-error">{condenseError}</p>}{!done && rule.id !== 'abstract-word-limit' && <button className="btn btn-apply btn-small" onClick={() => fixRule(rule.id)}>Mark reviewed</button>}</div>; })}</aside></div>;
 }
 
 function VerifyPanel({ selected, text, plan, onUnlock, onCompleted, onTextChange }: { selected: Journal; text: string; plan: 'free' | 'pro'; onUnlock: () => void; onCompleted: () => void; onTextChange: (value: string) => void }) {
@@ -1641,35 +1706,59 @@ function SubmissionAuthorForm({ authorName, onAuthorName, authorAffiliation, onA
   return <div className="submission-author-form"><div className="panel-label">Author details and declarations</div><div className="submission-form-grid"><label>Corresponding author<input value={authorName} onChange={(event) => onAuthorName(event.target.value)} placeholder="Full name" /></label><label>Affiliation<input value={authorAffiliation} onChange={(event) => onAuthorAffiliation(event.target.value)} placeholder="University, department, country" /></label></div><label>ORCID (optional)<input value={authorOrcid} onChange={(event) => onAuthorOrcid(event.target.value)} placeholder="0000-0000-0000-0000" /></label><label>Funding statement<textarea value={fundingStatement} onChange={(event) => onFundingStatement(event.target.value)} /></label><label>Competing interests<textarea value={conflictStatement} onChange={(event) => onConflictStatement(event.target.value)} /></label><label>Data availability statement<textarea value={dataStatement} onChange={(event) => onDataStatement(event.target.value)} /></label><label className="contact-consent"><input type="checkbox" checked={declarationsConfirmed} onChange={(event) => onDeclarationsConfirmed(event.target.checked)} /> I confirm the author details and declarations are accurate.</label></div>;
 }
 
-function buildManuscriptDocument(title: string, text: string) {
+function buildManuscriptDocument(title: string, text: string, requirements?: JournalFormattingRequirements) {
   const sections = splitManuscriptSections(text);
   const children: Array<Paragraph> = [];
+  const titleLine = text.match(/^title\s*:\s*(.+)$/im)?.[1]?.trim();
 
   if (title.trim()) {
     children.push(
       new Paragraph({
-        text: title.trim(),
+        children: [new TextRun({ text: title.trim(), bold: true, font: 'Times New Roman', size: 32 })],
         heading: 'Title',
+        alignment: 'center',
         spacing: { after: 180 },
       }),
     );
   }
 
   sections.forEach((section) => {
+    const sectionLines = section.name === 'title' && titleLine
+      ? section.lines.filter((line) => !line.toLowerCase().startsWith('title:'))
+      : section.lines;
+
     if (section.name !== 'body' && section.name !== 'title') {
       children.push(
         new Paragraph({
-          text: section.name.charAt(0).toUpperCase() + section.name.slice(1),
+          children: [new TextRun({
+            text: section.lines[0]?.trim() || section.name.charAt(0).toUpperCase() + section.name.slice(1),
+            bold: true,
+            font: 'Times New Roman',
+            size: 24,
+          })],
           heading: 'Heading1',
           spacing: { before: 180, after: 80 },
         }),
       );
     }
 
-    section.lines.forEach((line) => {
+    sectionLines.forEach((line, lineIndex) => {
+      if (section.name !== 'body' && lineIndex === 0 && detectSectionName(line) === section.name) return;
+      if (section.name === 'title' && titleLine && line.toLowerCase().startsWith('title:')) return;
+      if (!line.trim()) return;
+
+      const structuredAbstractLabel = section.name === 'abstract' && requirements?.abstract === 'structured'
+        ? line.match(/^(background|objective|aim|methods|results|conclusion|purpose)\s*:\s*(.*)$/i)
+        : null;
       children.push(
         new Paragraph({
-          children: [new TextRun({ text: line || '' })],
+          children: structuredAbstractLabel
+            ? [
+                new TextRun({ text: `${structuredAbstractLabel[1]}: `, bold: true, font: 'Times New Roman', size: 24 }),
+                new TextRun({ text: structuredAbstractLabel[2], font: 'Times New Roman', size: 24 }),
+              ]
+            : [new TextRun({ text: line, font: 'Times New Roman', size: 24 })],
+          spacing: { after: 120 },
         }),
       );
     });
@@ -1680,7 +1769,7 @@ function buildManuscriptDocument(title: string, text: string) {
   });
 }
 
-function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, plan, onUnlock }: { selected: Journal; text: string; title: string; formatDone: boolean; verifyDone: boolean; fixed: string[]; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; plan: 'free' | 'pro'; onUnlock: () => void }) {
+function SubmissionPanel({ selected, text, title, formatRequirements, formatDone, verifyDone, fixed, declarationsConfirmed, onDeclarationsConfirmed, authorName, authorAffiliation, authorOrcid, fundingStatement, conflictStatement, dataStatement, plan, onUnlock }: { selected: Journal; text: string; title: string; formatRequirements: JournalFormattingRequirements | null; formatDone: boolean; verifyDone: boolean; fixed: string[]; declarationsConfirmed: boolean; onDeclarationsConfirmed: (value: boolean) => void; authorName: string; authorAffiliation: string; authorOrcid: string; fundingStatement: string; conflictStatement: string; dataStatement: string; plan: 'free' | 'pro'; onUnlock: () => void }) {
   const [graphicalAbstract, setGraphicalAbstract] = useState<File | null>(null);
   const [coverLetter, setCoverLetter] = useState('');
   const [titlePageStatus, setTitlePageStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
@@ -1722,7 +1811,15 @@ function SubmissionPanel({ selected, text, title, formatDone, verifyDone, fixed,
     try {
       const titlePage = new Document({ sections: [{ children: [new Paragraph({ text: titleValue, heading: 'Title' }), new Paragraph({ text: authorName || 'Corresponding author not added' }), new Paragraph({ text: authorAffiliation || 'Affiliation not added' }), new Paragraph({ text: authorOrcid ? `ORCID: ${authorOrcid}` : 'ORCID not provided' }), new Paragraph({ text: `Funding: ${fundingStatement}` }), new Paragraph({ text: `Competing interests: ${conflictStatement}` }), new Paragraph({ text: `Data availability: ${dataStatement}` })] }] });
       const titlePageBlob = await Packer.toBlob(titlePage);
-      const manuscriptDoc = buildManuscriptDocument(titleValue, text);
+      const manuscriptDoc = buildManuscriptDocument(titleValue, text, formatRequirements ?? {
+        abstract: selected.requirements.abstract,
+        wordLimit: selected.requirements.wordLimit,
+        abstractWordLimit: null,
+        refStyle: selected.requirements.refStyle,
+        figuresTables: null,
+        supplementaryFiles: null,
+        declarations: null,
+      });
       const manuscriptBlob = await Packer.toBlob(manuscriptDoc);
       const zip = new JSZip();
       const requirementNotes = [
