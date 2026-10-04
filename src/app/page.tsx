@@ -248,6 +248,13 @@ function insertDraftIntoManuscript(text: string, anchor: string, draft: string) 
   return lines.join('\n');
 }
 
+function contentAfterSectionHeading(line: string) {
+  return line.replace(
+    /^\s*(?:\d+(?:\.\d+)*\.?\s*)?(?:materials and methods|introduction|background|abstract|keywords?|methods?|methodology|experimental|results?|findings?|outcomes?|discussion|conclusion|summary|limitations?|future work|future directions|references?)\b\s*:?\s*/i,
+    '',
+  ).trim();
+}
+
 function matchesQuartile(quartile: string, selectedQuartile: string) {
   if (selectedQuartile === 'Any quartile' || quartile === 'Unranked') return true;
   const rank = Number(quartile.replace('Q', ''));
@@ -1743,7 +1750,11 @@ function buildManuscriptDocument(title: string, text: string, requirements?: Jou
     }
 
     sectionLines.forEach((line, lineIndex) => {
-      if (section.name !== 'body' && lineIndex === 0 && detectSectionName(line) === section.name) return;
+      if (section.name !== 'body' && lineIndex === 0 && detectSectionName(line) === section.name) {
+        const inlineContent = contentAfterSectionHeading(line);
+        if (!inlineContent) return;
+        line = inlineContent;
+      }
       if (section.name === 'title' && titleLine && line.toLowerCase().startsWith('title:')) return;
       if (!line.trim()) return;
 
